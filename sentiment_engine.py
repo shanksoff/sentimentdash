@@ -19,7 +19,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-MODEL = "gemini-2.5-pro"
+MODEL = "gemini-3.1-flash-lite-preview"
 BATCH_SIZE = 20  # articles per run
 
 PROMPT_TEMPLATE = """You are a financial news sentiment analyst.
