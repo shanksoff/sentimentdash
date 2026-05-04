@@ -11,6 +11,7 @@ import logging
 import schedule
 
 from database import close_pool, get_conn, init_pool
+from fetch_market_data import upsert_price_history
 from fetch_news import fetch_for_ticker
 from sentiment_engine import make_client, score_unscored
 
@@ -30,7 +31,15 @@ def daily_run():
     client = make_client()
 
     for symbol in _tracked_symbols():
-        # 1. Fetch latest news
+        # 1. Refresh price history
+        with get_conn() as conn:
+            try:
+                upsert_price_history(conn, symbol)
+                log.info("refreshed price history for %s", symbol)
+            except Exception as exc:
+                log.error("price refresh failed for %s: %s", symbol, exc)
+
+        # 2. Fetch latest news
         with get_conn() as conn:
             try:
                 n = fetch_for_ticker(conn, symbol)

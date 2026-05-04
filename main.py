@@ -18,6 +18,7 @@ background bootstrap (fetch + score) so data appears within ~60 seconds.
 import logging
 import threading
 from contextlib import asynccontextmanager
+from datetime import date, timedelta
 
 import psycopg2.extras
 import yfinance as yf
@@ -146,11 +147,12 @@ def _fetch_price_rows(conn, symbol: str) -> list:
 
 @app.get("/api/price/{ticker}")
 def get_price(ticker: str) -> list[dict]:
-    """1-month OHLCV daily data."""
+    """1-month OHLCV daily data. Refreshes if latest row is older than 1 day."""
     symbol = ticker.upper()
     with get_conn() as conn:
         rows = _fetch_price_rows(conn, symbol)
-        if not rows:
+        stale = not rows or str(rows[-1]["date"]) < str(date.today() - timedelta(days=1))
+        if stale:
             try:
                 upsert_price_history(conn, symbol)
                 rows = _fetch_price_rows(conn, symbol)
