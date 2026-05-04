@@ -40,7 +40,7 @@ function ArticleCard({ article }) {
         {/* Gemini reasoning */}
         {article.summary && (
           <p className="text-xs text-slate-400 mt-1.5 italic leading-relaxed border-l-2 border-slate-700 pl-2">
-            "{article.summary}"
+            &quot;{article.summary}&quot;
           </p>
         )}
       </div>
