@@ -1,0 +1,83 @@
+# ============================================================
+#  docker-compose.yml
+#  Production compose file (OCI deployment).
+#  For local dev, docker-compose.override.yml swaps the
+#  postgres volume to ./data/postgres.
+# ============================================================
+
+services:
+
+  # ── PostgreSQL ─────────────────────────────────────────────
+  postgres:
+    image: postgres:15
+    container_name: sentiment_db
+    restart: always
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       ${POSTGRES_DB}
+    volumes:
+      - /mnt/data/postgres:/var/lib/postgresql/data
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    ports:
+      - "127.0.0.1:5432:5432"   # never exposed publicly
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  # ── FastAPI backend ────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: sentiment_backend
+    restart: always
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres      # override host to reach the postgres container
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+    # Not exposed to host — nginx proxies to it internally
+
+  # ── Daily sentiment scheduler ─────────────────────────────
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.scheduler
+    container_name: sentiment_scheduler
+    restart: always
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # ── React frontend (nginx) ─────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: sentiment_frontend
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+    networks:
+      - internal
+
+# ── Shared internal network ────────────────────────────────────
+networks:
+  internal:
+    driver: bridge

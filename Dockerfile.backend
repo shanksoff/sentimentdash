@@ -1,0 +1,23 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install deps first so this layer is cached on code-only changes
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Application source
+COPY database.py fetch_market_data.py fetch_news.py sentiment_engine.py main.py ./
+
+# .secrets for local dev; in production the Gemini key is injected via env
+COPY .secrets/ .secrets/
+
+EXPOSE 8000
+
+# --workers 2 is safe on the A1 (4 OCPU, 24 GB); tune up if needed
+CMD ["uvicorn", "main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "2", \
+     "--proxy-headers", \
+     "--forwarded-allow-ips", "*"]

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_in_Chrome__computer",
+      "Bash(pkill -f \"uvicorn main:app\")",
+      "Bash(uvicorn main:app --host 127.0.0.1 --port 8000 --reload)",
+      "Read(//tmp/**)",
+      "Bash(pip install *)",
+      "Bash(python -c \"import feedparser; print\\('feedparser OK'\\)\")",
+      "mcp__Claude_in_Chrome__browser_batch",
+      "mcp__Claude_in_Chrome__read_console_messages",
+      "mcp__Claude_in_Chrome__read_network_requests",
+      "mcp__Claude_in_Chrome__tabs_context_mcp"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+# ============================================================
+#  docker-compose.override.yml — LOCAL DEV ONLY
+#  Overrides the OCI block-volume path (/mnt/data/postgres)
+#  with a local bind mount. This file is NOT deployed to OCI.
+# ============================================================
+services:
+  postgres:
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
