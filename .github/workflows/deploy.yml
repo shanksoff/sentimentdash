@@ -1,17 +1,17 @@
 # ============================================================
 #  .github/workflows/deploy.yml
-#  CI/CD: lint → build → SSH deploy to OCI Ampere A1
+#  CI/CD: lint → SSH deploy to server (Hetzner or any VPS)
 #
 #  Required GitHub Actions secrets:
 #    POSTGRES_USER        DB username
 #    POSTGRES_PASSWORD    DB password
 #    POSTGRES_DB          DB name
 #    GEMINI_API_KEY       Gemini AI API key
-#    OCI_HOST             Public IP of the OCI instance
-#    OCI_USER             SSH user (usually ubuntu or opc)
-#    OCI_SSH_KEY          Private SSH key (PEM, no passphrase)
-#    OCI_DEPLOY_DIR       Absolute path to project dir on server
-#                         e.g. /home/ubuntu/sentiment-dashboard
+#    SERVER_HOST          Public IP of the server
+#    SERVER_USER          SSH user (e.g. root or ubuntu)
+#    SERVER_SSH_KEY       Private SSH key (PEM, no passphrase)
+#    SERVER_DEPLOY_DIR    Absolute path to project dir on server
+#                         e.g. /root/sentimentdash
 # ============================================================
 
 name: CI / CD
@@ -45,7 +45,7 @@ jobs:
           flake8 \
             --max-line-length=120 \
             --extend-ignore=E203,W503 \
-            database.py main.py fetch_market_data.py fetch_news.py sentiment_engine.py
+            database.py main.py fetch_market_data.py fetch_news.py sentiment_engine.py scheduler.py
 
   # ── Lint JavaScript ─────────────────────────────────────────
   lint-js:
@@ -69,12 +69,11 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
-  # ── Deploy to OCI ────────────────────────────────────────────
+  # ── Deploy ───────────────────────────────────────────────────
   deploy:
-    name: Deploy to OCI
+    name: Deploy to server
     runs-on: ubuntu-latest
     needs: [lint-python, lint-js]
-    # Only deploy on pushes to main (not on PRs)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
@@ -82,15 +81,15 @@ jobs:
 
       - name: Write SSH key
         run: |
-          install -m 600 -D /dev/null ~/.ssh/oci_key
-          echo "${{ secrets.OCI_SSH_KEY }}" > ~/.ssh/oci_key
+          install -m 600 -D /dev/null ~/.ssh/server_key
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/server_key
           echo "StrictHostKeyChecking no" >> ~/.ssh/config
 
       - name: Write .env on server
         run: |
-          ssh -i ~/.ssh/oci_key ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }} bash -s <<'REMOTE'
+          ssh -i ~/.ssh/server_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash -s <<'REMOTE'
             set -e
-            cd ${{ secrets.OCI_DEPLOY_DIR }}
+            cd ${{ secrets.SERVER_DEPLOY_DIR }}
             cat > .env <<ENV
           POSTGRES_USER=${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
@@ -102,11 +101,10 @@ jobs:
 
       - name: Pull latest code & rebuild containers
         run: |
-          ssh -i ~/.ssh/oci_key ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }} bash -s <<'REMOTE'
+          ssh -i ~/.ssh/server_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash -s <<'REMOTE'
             set -e
-            cd ${{ secrets.OCI_DEPLOY_DIR }}
+            cd ${{ secrets.SERVER_DEPLOY_DIR }}
             git pull --ff-only origin main
-            docker compose pull postgres   # refresh base image if updated
             docker compose up -d --build --remove-orphans
             docker compose ps
           REMOTE
@@ -114,9 +112,9 @@ jobs:
       - name: Smoke-test API health
         run: |
           sleep 10
-          ssh -i ~/.ssh/oci_key ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }} \
+          ssh -i ~/.ssh/server_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
             "curl -sf http://localhost/api/price/AAPL | head -c 80 || true"
 
       - name: Clean up SSH key
         if: always()
-        run: rm -f ~/.ssh/oci_key
+        run: rm -f ~/.ssh/server_key
