@@ -1,3 +1,7 @@
+import { useState } from 'react'
+
+const INITIAL_LIMIT = 10
+
 function ScoreBadge({ score }) {
   const cls =
     score >= 7 ? 'bg-emerald-900/60 text-emerald-300 border border-emerald-700'
@@ -49,11 +53,16 @@ function ArticleCard({ article }) {
 }
 
 export default function SentimentPanel({ articles, selectedDate, onClearDate }) {
+  const [showAll, setShowAll] = useState(false)
+
   const display = selectedDate
     ? articles.filter(
         a => (a.published_at || a.created_at)?.slice(0, 10) === selectedDate
       )
     : articles
+
+  const visible = showAll ? display : display.slice(0, INITIAL_LIMIT)
+  const hasMore = display.length > INITIAL_LIMIT
 
   return (
     <div className="card">
@@ -91,7 +100,23 @@ export default function SentimentPanel({ articles, selectedDate, onClearDate }) 
             : 'No sentiment data yet — the scheduler populates this daily.'}
         </p>
       ) : (
-        <div>{display.map((a, i) => <ArticleCard key={i} article={a} />)}</div>
+        <>
+          <div className={`${showAll ? 'max-h-[800px] overflow-y-auto pr-1' : ''}`}>
+            {visible.map((a, i) => <ArticleCard key={i} article={a} />)}
+          </div>
+
+          {hasMore && (
+            <button
+              onClick={() => setShowAll(v => !v)}
+              className="mt-3 w-full py-2 text-xs text-slate-400 hover:text-slate-200
+                         border border-border hover:border-slate-600 rounded-lg transition-colors"
+            >
+              {showAll
+                ? '▲ Show less'
+                : `▼ Show ${display.length - INITIAL_LIMIT} more articles`}
+            </button>
+          )}
+        </>
       )}
     </div>
   )

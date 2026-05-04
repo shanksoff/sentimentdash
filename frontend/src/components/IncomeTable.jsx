@@ -6,10 +6,6 @@ const METRICS = [
   { key: 'eps',                     label: 'EPS' },
   { key: 'net_income',              label: 'Net Income' },
   { key: 'net_profit_margin',       label: 'Net Margin', pct: true },
-  { key: 'debt_equity',             label: 'Debt / Equity' },
-  { key: 'roic',                    label: 'ROIC', pct: true },
-  { key: 'roa',                     label: 'ROA', pct: true },
-  { key: 'roe',                     label: 'ROE', pct: true },
 ]
 
 function fmtCell(val, pct = false) {
