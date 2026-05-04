@@ -2,5 +2,5 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY database.py fetch_news.py sentiment_engine.py scheduler.py ./
+COPY database.py fetch_market_data.py fetch_news.py sentiment_engine.py scheduler.py ./
 CMD ["python", "-u", "scheduler.py"]
