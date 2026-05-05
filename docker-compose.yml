@@ -6,21 +6,20 @@
 # ============================================================
 
 services:
-
   # ── PostgreSQL ─────────────────────────────────────────────
   postgres:
     image: postgres:15
     container_name: sentiment_db
     restart: always
     environment:
-      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB:       ${POSTGRES_DB}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
     ports:
-      - "127.0.0.1:5432:5432"   # never exposed publicly
+      - "127.0.0.1:5432:5432" # never exposed publicly
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -38,7 +37,7 @@ services:
     restart: always
     env_file: .env
     environment:
-      POSTGRES_HOST: postgres      # override host to reach the postgres container
+      POSTGRES_HOST: postgres # override host to reach the postgres container
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,6 +73,7 @@ services:
       - "443:443"
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /root/portfolio:/usr/share/nginx/portfolio:ro
     depends_on:
       - backend
     networks:
