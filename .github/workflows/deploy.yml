@@ -104,7 +104,8 @@ jobs:
           ssh -i ~/.ssh/server_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash -s <<'REMOTE'
             set -e
             cd ${{ secrets.SERVER_DEPLOY_DIR }}
-            git pull --ff-only origin main
+            git fetch origin main
+            git reset --hard origin/main
             docker compose up -d --build --remove-orphans
             docker compose ps
           REMOTE
