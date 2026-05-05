@@ -19,13 +19,12 @@ import logging
 import threading
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
+from decimal import Decimal
 
 import psycopg2.extras
 import yfinance as yf
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
-from decimal import Decimal
 
 from database import close_pool, get_conn, init_pool
 from fetch_market_data import upsert_price_history, upsert_ticker
@@ -58,6 +57,7 @@ def _bootstrap_sentiment(symbol: str) -> None:
 
 # ── Lifespan ────────────────────────────────────────────────────────────────
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_pool(minconn=2, maxconn=10)
@@ -77,6 +77,7 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:3000",
         "http://localhost:80",
+        "https://sentimentdash.shanksoff.com",
     ],
     allow_methods=["GET"],
     allow_headers=["*"],
@@ -84,6 +85,7 @@ app.add_middleware(
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _dec_to_float(v):
     return float(v) if isinstance(v, Decimal) else v
@@ -112,9 +114,9 @@ def _compute_performance(symbol: str) -> dict:
         return round((latest - past) / past, 6) if past else None
 
     return {
-        "perf_1m":  trailing_return(21),
-        "perf_3m":  trailing_return(63),
-        "perf_6m":  trailing_return(126),
+        "perf_1m": trailing_return(21),
+        "perf_3m": trailing_return(63),
+        "perf_6m": trailing_return(126),
         "perf_12m": trailing_return(250),
     }
 
@@ -128,12 +130,19 @@ def _cache_performance(symbol: str, perfs: dict) -> None:
                 SET perf_1m = %s, perf_3m = %s, perf_6m = %s, perf_12m = %s
                 WHERE symbol = %s
                 """,
-                (perfs["perf_1m"], perfs["perf_3m"], perfs["perf_6m"], perfs["perf_12m"], symbol),
+                (
+                    perfs["perf_1m"],
+                    perfs["perf_3m"],
+                    perfs["perf_6m"],
+                    perfs["perf_12m"],
+                    symbol,
+                ),
             )
         conn.commit()
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
+
 
 def _fetch_price_rows(conn, symbol: str) -> list:
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -151,7 +160,9 @@ def get_price(ticker: str) -> list[dict]:
     symbol = ticker.upper()
     with get_conn() as conn:
         rows = _fetch_price_rows(conn, symbol)
-        stale = not rows or str(rows[-1]["date"]) < str(date.today() - timedelta(days=1))
+        stale = not rows or str(rows[-1]["date"]) < str(
+            date.today() - timedelta(days=1)
+        )
         if stale:
             try:
                 upsert_price_history(conn, symbol)
@@ -240,6 +251,7 @@ def get_income_statement(ticker: str) -> list[dict]:
     income = row.get("income_statement") or []
     if isinstance(income, str):
         import json
+
         income = json.loads(income)
     return income
 
@@ -262,9 +274,9 @@ def get_performance(ticker: str) -> dict:
         raise HTTPException(status_code=404, detail=f"Ticker '{symbol}' not found.")
 
     result = {
-        "perf_1m":  row.get("perf_1m"),
-        "perf_3m":  row.get("perf_3m"),
-        "perf_6m":  row.get("perf_6m"),
+        "perf_1m": row.get("perf_1m"),
+        "perf_3m": row.get("perf_3m"),
+        "perf_6m": row.get("perf_6m"),
         "perf_12m": row.get("perf_12m"),
     }
 
@@ -283,4 +295,5 @@ def get_performance(ticker: str) -> dict:
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
