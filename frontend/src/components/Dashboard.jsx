@@ -5,11 +5,9 @@ import FundamentalsPanel from './FundamentalsPanel'
 import IncomeTable from './IncomeTable'
 import PerformanceStrip from './PerformanceStrip'
 import SentimentPanel from './SentimentPanel'
-
-const DEFAULT_TICKER = 'AAPL'
+import TickerSearch from './TickerSearch'
 
 export default function Dashboard() {
-  const [inputValue, setInputValue] = useState(DEFAULT_TICKER)
   const [ticker, setTicker] = useState('')
 
   const [price, setPrice] = useState([])
@@ -86,43 +84,19 @@ export default function Dashboard() {
 
   useEffect(() => stopPolling, [stopPolling])
 
-  const handleSearch = (e) => {
-    e.preventDefault()
-    const sym = inputValue.trim().toUpperCase()
-    if (sym) fetchAll(sym)
-  }
-
   return (
     <div className="min-h-screen bg-surface text-slate-200">
       {/* ── Header ───────────────────────────────────────────── */}
       <header className="border-b border-border bg-card/60 backdrop-blur sticky top-0 z-10">
         <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center gap-6">
-          <span className="text-emerald-400 font-bold text-xl tracking-tight whitespace-nowrap">
-            📈 SentimentDash
+          <span className="text-emerald-400 font-bold text-lg tracking-tight whitespace-nowrap">
+            📈 Stock Sentiment Analysis Dashboard
           </span>
-          <form onSubmit={handleSearch} className="flex gap-2 flex-1 max-w-md">
-            <input
-              type="text"
-              value={inputValue}
-              onChange={e => setInputValue(e.target.value.toUpperCase())}
-              placeholder="Ticker symbol…"
-              className="flex-1 bg-surface border border-border rounded-lg px-4 py-2 text-sm
-                         text-slate-200 placeholder-slate-600
-                         focus:outline-none focus:ring-2 focus:ring-emerald-500/60 focus:border-emerald-500/60"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-5 py-2 rounded-lg text-sm font-semibold
-                         bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40
-                         transition-colors"
-            >
-              {loading ? 'Loading…' : 'Search'}
-            </button>
-          </form>
+
+          <TickerSearch onSearch={fetchAll} loading={loading} />
 
           {ticker && (
-            <span className="text-slate-400 text-sm">
+            <span className="text-slate-400 text-sm whitespace-nowrap">
               Showing: <span className="text-slate-100 font-mono font-semibold">{ticker}</span>
               {fundamentals?.company_name && (
                 <span className="ml-2 text-slate-500">— {fundamentals.company_name}</span>
