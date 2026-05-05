@@ -1,8 +1,9 @@
 # ============================================================
 #  docker-compose.yml
 #  Production compose file.
-#  For local dev, docker-compose.override.yml swaps the
-#  postgres volume to ./data/postgres.
+#  nginx is handled by the portfolio repo.
+#  Containers join the shared 'web' network so portfolio
+#  nginx can proxy to them.
 # ============================================================
 
 services:
@@ -19,7 +20,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
     ports:
-      - "127.0.0.1:5432:5432" # never exposed publicly
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -37,15 +38,15 @@ services:
     restart: always
     env_file: .env
     environment:
-      POSTGRES_HOST: postgres # override host to reach the postgres container
+      POSTGRES_HOST: postgres
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - internal
-    # Not exposed to host — nginx proxies to it internally
+      - web
 
-  # ── Daily sentiment scheduler ─────────────────────────────
+  # ── Daily sentiment scheduler ──────────────────────────────
   scheduler:
     build:
       context: .
@@ -61,28 +62,25 @@ services:
     networks:
       - internal
 
-  # ── React frontend (nginx) ─────────────────────────────────
+  # ── React frontend (internal only) ────────────────────────
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
     container_name: sentiment_frontend
     restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-      - /root/portfolio:/usr/share/nginx/portfolio:ro
     depends_on:
       - backend
     networks:
       - internal
+      - web
 
-# ── Shared internal network ────────────────────────────────────
+# ── Networks ───────────────────────────────────────────────────
 networks:
   internal:
     driver: bridge
+  web:
+    external: true
 
 # ── Named volumes ──────────────────────────────────────────────
 volumes:
