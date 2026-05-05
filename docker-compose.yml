@@ -1,6 +1,6 @@
 # ============================================================
 #  docker-compose.yml
-#  Production compose file (OCI deployment).
+#  Production compose file.
 #  For local dev, docker-compose.override.yml swaps the
 #  postgres volume to ./data/postgres.
 # ============================================================
@@ -72,6 +72,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - backend
     networks:

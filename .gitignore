@@ -5,3 +5,9 @@ __pycache__/
 *.pyc
 *.pyo
 .DS_Store
+
+# Claude Code IDE config
+.claude/
+
+# Node modules
+frontend/node_modules/
