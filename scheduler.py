@@ -11,26 +11,38 @@ import logging
 import schedule
 
 from database import close_pool, get_conn, init_pool
-from fetch_market_data import upsert_price_history
+from fetch_market_data import upsert_price_history, upsert_ticker
 from fetch_news import fetch_for_ticker
 from sentiment_engine import make_client, score_unscored
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
+# Top 25 S&P 500 companies by index weight + SPY benchmark
+TRACKED_SYMBOLS = [
+    "NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "GOOG", "AVGO", "META",
+    "TSLA", "WMT", "BRK-B", "LLY", "JPM", "MU", "AMD", "XOM",
+    "V", "INTC", "ORCL", "JNJ", "COST", "MA", "CAT", "BAC", "NFLX",
+    "SPY",
+]
 
-def _tracked_symbols() -> list[str]:
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT symbol FROM tickers ORDER BY symbol")
-            return [r[0] for r in cur.fetchall()]
+
+def _seed_tickers():
+    """Ensure all tracked symbols exist in the tickers table."""
+    for symbol in TRACKED_SYMBOLS:
+        with get_conn() as conn:
+            try:
+                upsert_ticker(conn, symbol)
+                log.info("seeded ticker %s", symbol)
+            except Exception as exc:
+                log.error("seed failed for %s: %s", symbol, exc)
 
 
 def daily_run():
     log.info("=== daily run started ===")
     client = make_client()
 
-    for symbol in _tracked_symbols():
+    for symbol in TRACKED_SYMBOLS:
         # 1. Refresh price history
         with get_conn() as conn:
             try:
@@ -81,6 +93,7 @@ def daily_run():
 if __name__ == "__main__":
     init_pool(minconn=1, maxconn=5)
     try:
+        _seed_tickers()
         daily_run()
         schedule.every().day.at("02:00").do(daily_run)
         log.info("scheduler armed — next run at 02:00 UTC daily")

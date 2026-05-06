@@ -90,7 +90,7 @@ export default function Dashboard() {
       <header className="border-b border-border bg-card/60 backdrop-blur sticky top-0 z-10">
         <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center gap-6">
           <span className="text-emerald-400 font-bold text-lg tracking-tight whitespace-nowrap">
-            📈 S&P 500 Sentiment Analysis Dashboard
+            📈 Top 25 S&P 500 Sentiment Analysis Dashboard
           </span>
 
           <TickerSearch onSearch={fetchAll} loading={loading} />
