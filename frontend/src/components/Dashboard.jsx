@@ -84,6 +84,12 @@ export default function Dashboard() {
 
   useEffect(() => stopPolling, [stopPolling])
 
+  // Auto-load default ticker on first visit
+  useEffect(() => {
+    fetchAll('SPY')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
     <div className="min-h-screen bg-surface text-slate-200">
       {/* ── Header ───────────────────────────────────────────── */}
