@@ -6,6 +6,7 @@ import IncomeTable from './IncomeTable'
 import PerformanceStrip from './PerformanceStrip'
 import SentimentPanel from './SentimentPanel'
 import TickerSearch from './TickerSearch'
+import VolatilityPanel from './VolatilityPanel'
 
 export default function Dashboard() {
   const [ticker, setTicker] = useState('')
@@ -150,6 +151,7 @@ export default function Dashboard() {
                   onSentimentClick={setSelectedSentimentDate}
                 />
                 <PerformanceStrip data={performance} />
+                <VolatilityPanel priceData={price} />
               </div>
             </div>
 

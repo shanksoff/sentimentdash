@@ -1,64 +1,105 @@
+import { useState } from 'react'
 import {
-  ComposedChart, Area, Line, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ComposedChart, Area, Line, Bar, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
+import { bollingerBands, rsi as calcRSI, macd as calcMACD } from '../utils/indicators'
+
+// ─── Data helpers ────────────────────────────────────────────
 
 function mergeData(priceData, sentimentData) {
   const priceDates = priceData.map(p => p.date).sort()
   const lastPriceDate = priceDates[priceDates.length - 1]
 
-  // For each article, snap to nearest earlier-or-equal price date
   const sentByDate = {}
   sentimentData.forEach(s => {
     const raw = s.published_at || s.created_at
     if (!raw) return
     let date = raw.slice(0, 10)
     if (!priceDates.includes(date)) {
-      // Find closest earlier price date
       const earlier = priceDates.filter(d => d <= date)
       date = earlier.length ? earlier[earlier.length - 1] : lastPriceDate
     }
     if (!sentByDate[date]) sentByDate[date] = []
     sentByDate[date].push(s.score)
   })
+
   const avgSent = Object.fromEntries(
     Object.entries(sentByDate).map(([d, scores]) => [
       d,
       +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2),
     ])
   )
+
   return priceData.map(p => ({
-    date: p.date,
-    close: parseFloat(p.close),
+    date:      p.date,
+    close:     parseFloat(p.close),
     sentiment: avgSent[p.date] ?? null,
   }))
 }
 
-const CustomTooltip = ({ active, payload, label }) => {
+const xAxisProps = {
+  dataKey:      'date',
+  tick:         { fill: '#64748b', fontSize: 11 },
+  tickLine:     false,
+  axisLine:     { stroke: '#2a2f3d' },
+  tickFormatter: d => d.slice(5),
+  interval:     'preserveStartEnd',
+}
+
+// ─── Tooltips ────────────────────────────────────────────────
+
+function PriceTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
+  const map = Object.fromEntries(payload.map(e => [e.dataKey, e]))
   return (
     <div className="card text-xs space-y-1 shadow-xl">
       <p className="text-slate-400 font-medium">{label}</p>
-      {payload.map(entry => (
-        <p key={entry.name} style={{ color: entry.color }}>
-          {entry.name === 'close'
-            ? `Price: $${entry.value?.toFixed(2)}`
-            : `Sentiment: ${entry.value?.toFixed(1)}/10`}
-        </p>
-      ))}
+      {map.close     && <p className="text-emerald-400">Price: ${map.close.value?.toFixed(2)}</p>}
+      {map.sentiment && <p className="text-amber-400">Sentiment: {map.sentiment.value?.toFixed(1)}/10</p>}
+      {map.bbUpper   && <p className="text-sky-400">BB Upper: ${map.bbUpper.value?.toFixed(2)}</p>}
+      {map.bbMid     && <p className="text-sky-300">BB Mid: ${map.bbMid.value?.toFixed(2)}</p>}
+      {map.bbLower   && <p className="text-sky-400">BB Lower: ${map.bbLower.value?.toFixed(2)}</p>}
     </div>
   )
 }
 
-// Rendered for every data point on the sentiment line.
-// Returns null for points with no sentiment (keeps the line gapped correctly).
+function RSITooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null
+  const val = payload.find(e => e.dataKey === 'rsi')?.value
+  return (
+    <div className="card text-xs space-y-1 shadow-xl">
+      <p className="text-slate-400 font-medium">{label}</p>
+      {val != null && <p className="text-violet-400">RSI: {val.toFixed(1)}</p>}
+    </div>
+  )
+}
+
+function MACDTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null
+  const map = Object.fromEntries(payload.map(e => [e.dataKey, e]))
+  return (
+    <div className="card text-xs space-y-1 shadow-xl">
+      <p className="text-slate-400 font-medium">{label}</p>
+      {map.macd?.value   != null && <p className="text-blue-400">MACD: {map.macd.value.toFixed(4)}</p>}
+      {map.signal?.value != null && <p className="text-orange-400">Signal: {map.signal.value.toFixed(4)}</p>}
+      {(map.histogram?.value ?? null) != null &&
+        <p className={map.histogram.value >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+          Hist: {map.histogram.value.toFixed(4)}
+        </p>}
+    </div>
+  )
+}
+
+// ─── Sentiment dot (clickable) ───────────────────────────────
+
 function SentimentDot({ cx, cy, payload, selectedDate, onSentimentClick }) {
   if (payload?.sentiment == null) return null
   const isSelected = selectedDate === payload.date
   return (
     <circle
-      cx={cx}
-      cy={cy}
+      cx={cx} cy={cy}
       r={isSelected ? 7 : 5}
       fill={isSelected ? '#fbbf24' : '#f59e0b'}
       stroke={isSelected ? '#fff' : 'none'}
@@ -69,10 +110,35 @@ function SentimentDot({ cx, cy, payload, selectedDate, onSentimentClick }) {
   )
 }
 
-export default function OverlayChart({ priceData, sentimentData, ticker, selectedDate, onSentimentClick }) {
-  const data = mergeData(priceData, sentimentData)
+// ─── Indicator toggle button ─────────────────────────────────
 
-  if (!data.length) {
+function IndicatorBtn({ label, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-2.5 py-1 rounded text-xs font-mono font-semibold transition-colors border ${
+        active
+          ? 'bg-emerald-600/20 text-emerald-400 border-emerald-600/50'
+          : 'bg-transparent text-slate-500 border-border hover:text-slate-300 hover:border-slate-500'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+// ─── Main component ──────────────────────────────────────────
+
+export default function OverlayChart({
+  priceData, sentimentData, ticker, selectedDate, onSentimentClick,
+}) {
+  const [ind, setInd] = useState({ bb: false, rsi: false, macd: false })
+  const toggle = key => setInd(prev => ({ ...prev, [key]: !prev[key] }))
+
+  const base = mergeData(priceData, sentimentData)
+
+  if (!base.length) {
     return (
       <div className="card flex items-center justify-center h-64 text-slate-600 text-sm">
         No price data for {ticker}
@@ -80,34 +146,63 @@ export default function OverlayChart({ priceData, sentimentData, ticker, selecte
     )
   }
 
-  const prices = data.map(d => d.close)
+  // ── Compute indicators ──────────────────────────────────────
+  const closes = priceData.map(p => parseFloat(p.close))
+  const bb      = bollingerBands(closes)
+  const rsiVals = calcRSI(closes)
+  const { macdLine, signalLine, histogram } = calcMACD(closes)
+
+  // ── Build chart datasets ────────────────────────────────────
+  const priceChartData = base.map((d, i) => ({
+    ...d,
+    bbUpper: bb[i].upper,
+    bbMid:   bb[i].mid,
+    bbLower: bb[i].lower,
+  }))
+
+  const rsiChartData = priceData.map((p, i) => ({
+    date: p.date,
+    rsi:  rsiVals[i],
+  }))
+
+  const macdChartData = priceData.map((p, i) => ({
+    date:      p.date,
+    macd:      macdLine[i],
+    signal:    signalLine[i],
+    histogram: histogram[i],
+  }))
+
+  // ── Price chart domain ──────────────────────────────────────
+  const prices   = closes
   const priceMin = Math.floor(Math.min(...prices) * 0.995)
   const priceMax = Math.ceil(Math.max(...prices) * 1.005)
 
-  const hasSentiment = data.some(d => d.sentiment != null)
+  const hasSentiment = base.some(d => d.sentiment != null)
 
   return (
-    <div className="card">
+    <div className="card space-y-0">
+      {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-slate-300">
           {ticker} — 30-Day Price &amp; Sentiment Overlay
         </h2>
-        {hasSentiment && (
-          <p className="text-xs text-slate-600">Click an amber dot to filter news below</p>
-        )}
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1.5">
+            <IndicatorBtn label="BB"   active={ind.bb}   onClick={() => toggle('bb')}   />
+            <IndicatorBtn label="RSI"  active={ind.rsi}  onClick={() => toggle('rsi')}  />
+            <IndicatorBtn label="MACD" active={ind.macd} onClick={() => toggle('macd')} />
+          </div>
+          {hasSentiment && (
+            <p className="text-xs text-slate-600">Click an amber dot to filter news below</p>
+          )}
+        </div>
       </div>
 
-      <ResponsiveContainer width="100%" height={320}>
-        <ComposedChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+      {/* ── Price + Sentiment (+ optional BB) ──────────────── */}
+      <ResponsiveContainer width="100%" height={300}>
+        <ComposedChart data={priceChartData} syncId="chartSync" margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3d" vertical={false} />
-          <XAxis
-            dataKey="date"
-            tick={{ fill: '#64748b', fontSize: 11 }}
-            tickLine={false}
-            axisLine={{ stroke: '#2a2f3d' }}
-            tickFormatter={d => d.slice(5)}
-            interval="preserveStartEnd"
-          />
+          <XAxis {...xAxisProps} />
           <YAxis
             yAxisId="price"
             orientation="left"
@@ -128,17 +223,25 @@ export default function OverlayChart({ priceData, sentimentData, ticker, selecte
             tickFormatter={v => `${v}/10`}
             width={50}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<PriceTooltip />} />
           <Legend
             wrapperStyle={{ fontSize: 12, color: '#94a3b8', paddingTop: 12 }}
-            formatter={name => name === 'close' ? 'Close Price' : 'Avg Sentiment'}
+            formatter={name => ({
+              close:     'Close Price',
+              sentiment: 'Avg Sentiment',
+              bbUpper:   'BB Upper',
+              bbMid:     'BB Mid',
+              bbLower:   'BB Lower',
+            }[name] ?? name)}
           />
           <defs>
             <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%"  stopColor="#10b981" stopOpacity={0.2} />
-              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0}   />
             </linearGradient>
           </defs>
+
+          {/* Price area */}
           <Area
             yAxisId="price"
             type="monotone"
@@ -149,6 +252,18 @@ export default function OverlayChart({ priceData, sentimentData, ticker, selecte
             dot={false}
             activeDot={{ r: 4, fill: '#10b981' }}
           />
+
+          {/* Bollinger Bands (conditional) */}
+          {ind.bb && <>
+            <Line yAxisId="price" type="monotone" dataKey="bbUpper" stroke="#38bdf8" strokeWidth={1}
+                  strokeDasharray="4 3" dot={false} activeDot={false} />
+            <Line yAxisId="price" type="monotone" dataKey="bbMid"   stroke="#7dd3fc" strokeWidth={1}
+                  strokeDasharray="2 3" dot={false} activeDot={false} />
+            <Line yAxisId="price" type="monotone" dataKey="bbLower" stroke="#38bdf8" strokeWidth={1}
+                  strokeDasharray="4 3" dot={false} activeDot={false} />
+          </>}
+
+          {/* Sentiment line */}
           <Line
             yAxisId="sentiment"
             type="monotone"
@@ -156,7 +271,6 @@ export default function OverlayChart({ priceData, sentimentData, ticker, selecte
             stroke="#f59e0b"
             strokeWidth={2}
             connectNulls={false}
-            // Custom dot — clickable, highlights the selected date
             dot={props => (
               <SentimentDot
                 key={props.index}
@@ -165,16 +279,11 @@ export default function OverlayChart({ priceData, sentimentData, ticker, selecte
                 onSentimentClick={onSentimentClick}
               />
             )}
-            // Active dot on hover also clickable
             activeDot={props => (
               <circle
                 key="active"
-                cx={props.cx}
-                cy={props.cy}
-                r={8}
-                fill="#f59e0b"
-                stroke="#fff"
-                strokeWidth={2}
+                cx={props.cx} cy={props.cy} r={8}
+                fill="#f59e0b" stroke="#fff" strokeWidth={2}
                 style={{ cursor: 'pointer' }}
                 onClick={e => { e.stopPropagation(); onSentimentClick(props.payload.date) }}
               />
@@ -182,6 +291,84 @@ export default function OverlayChart({ priceData, sentimentData, ticker, selecte
           />
         </ComposedChart>
       </ResponsiveContainer>
+
+      {/* ── RSI sub-chart ───────────────────────────────────── */}
+      {ind.rsi && (
+        <div className="mt-4 pt-4 border-t border-border">
+          <p className="text-xs text-slate-500 mb-2 font-mono">RSI (14)</p>
+          <ResponsiveContainer width="100%" height={130}>
+            <ComposedChart data={rsiChartData} syncId="chartSync" margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3d" vertical={false} />
+              <XAxis {...xAxisProps} />
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fill: '#64748b', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                ticks={[0, 30, 50, 70, 100]}
+                width={30}
+              />
+              <Tooltip content={<RSITooltip />} />
+              {/* Overbought / oversold bands */}
+              <ReferenceLine y={70} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} />
+              <ReferenceLine y={50} stroke="#64748b" strokeDasharray="2 4" strokeOpacity={0.4} />
+              <ReferenceLine y={30} stroke="#10b981" strokeDasharray="3 3" strokeOpacity={0.5} />
+              <Line
+                type="monotone"
+                dataKey="rsi"
+                stroke="#a78bfa"
+                strokeWidth={2}
+                dot={false}
+                connectNulls={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+          <div className="flex gap-4 mt-1 text-[10px] text-slate-600">
+            <span className="text-red-400/70">— 70 overbought</span>
+            <span className="text-emerald-400/70">— 30 oversold</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── MACD sub-chart ──────────────────────────────────── */}
+      {ind.macd && (
+        <div className="mt-4 pt-4 border-t border-border">
+          <p className="text-xs text-slate-500 mb-2 font-mono">MACD (12, 26, 9)</p>
+          <ResponsiveContainer width="100%" height={130}>
+            <ComposedChart data={macdChartData} syncId="chartSync" margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3d" vertical={false} />
+              <XAxis {...xAxisProps} />
+              <YAxis
+                tick={{ fill: '#64748b', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                width={45}
+                tickFormatter={v => v.toFixed(2)}
+              />
+              <Tooltip content={<MACDTooltip />} />
+              <ReferenceLine y={0} stroke="#64748b" strokeOpacity={0.4} />
+              {/* Histogram bars, green when positive, red when negative */}
+              <Bar dataKey="histogram" barSize={4}>
+                {macdChartData.map((entry, i) => (
+                  <Cell
+                    key={`cell-${i}`}
+                    fill={entry.histogram == null ? 'transparent' : entry.histogram >= 0 ? '#10b981' : '#ef4444'}
+                    fillOpacity={0.7}
+                  />
+                ))}
+              </Bar>
+              <Line type="monotone" dataKey="macd"   stroke="#60a5fa" strokeWidth={1.5} dot={false} connectNulls={false} />
+              <Line type="monotone" dataKey="signal" stroke="#fb923c" strokeWidth={1.5} dot={false} connectNulls={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+          <div className="flex gap-4 mt-1 text-[10px] text-slate-600">
+            <span className="text-blue-400/70">— MACD</span>
+            <span className="text-orange-400/70">— Signal</span>
+            <span className="text-emerald-400/70">▮ Histogram +</span>
+            <span className="text-red-400/70">▮ Histogram −</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
