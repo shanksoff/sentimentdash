@@ -57,6 +57,9 @@ function PriceTooltip({ active, payload, label }) {
     <div className="card text-xs space-y-1 shadow-xl">
       <p className="text-slate-400 font-medium">{label}</p>
       {map.close     && <p className="text-emerald-400">Price: ${map.close.value?.toFixed(2)}</p>}
+      {map.yhat      && <p className="text-violet-400">Forecast: ${map.yhat.value?.toFixed(2)}</p>}
+      {map.yhatUpper && <p className="text-violet-300/70">CI Upper: ${map.yhatUpper.value?.toFixed(2)}</p>}
+      {map.yhatLower && <p className="text-violet-300/70">CI Lower: ${map.yhatLower.value?.toFixed(2)}</p>}
       {map.sentiment && <p className="text-amber-400">Sentiment: {map.sentiment.value?.toFixed(1)}/10</p>}
       {map.bbUpper   && <p className="text-sky-400">BB Upper: ${map.bbUpper.value?.toFixed(2)}</p>}
       {map.bbMid     && <p className="text-sky-300">BB Mid: ${map.bbMid.value?.toFixed(2)}</p>}
@@ -131,9 +134,9 @@ function IndicatorBtn({ label, active, onClick }) {
 // ─── Main component ──────────────────────────────────────────
 
 export default function OverlayChart({
-  priceData, sentimentData, ticker, selectedDate, onSentimentClick,
+  priceData, sentimentData, ticker, selectedDate, onSentimentClick, forecastData,
 }) {
-  const [ind, setInd] = useState({ bb: false, rsi: false, macd: false })
+  const [ind, setInd] = useState({ bb: false, rsi: false, macd: false, forecast: false })
   const toggle = key => setInd(prev => ({ ...prev, [key]: !prev[key] }))
 
   const base = mergeData(priceData, sentimentData)
@@ -153,12 +156,41 @@ export default function OverlayChart({
   const { macdLine, signalLine, histogram } = calcMACD(closes)
 
   // ── Build chart datasets ────────────────────────────────────
-  const priceChartData = base.map((d, i) => ({
-    ...d,
-    bbUpper: bb[i].upper,
-    bbMid:   bb[i].mid,
-    bbLower: bb[i].lower,
+  const lastClose = closes[closes.length - 1]
+  const lastDate  = base[base.length - 1]?.date
+
+  // Merge forecast into chart data: historical rows get null for forecast keys,
+  // forecast rows get null for close/sentiment/BB.
+  // The last historical point is used as the anchor so the line connects.
+  const forecastRows = forecastData?.forecast ?? []
+  const anchorRow = forecastRows.length > 0
+    ? [{ date: lastDate, yhat: lastClose, yhatLower: lastClose, yhatUpper: lastClose }]
+    : []
+  const futureRows = forecastRows.map(f => ({
+    date: f.date, yhat: f.yhat, yhatLower: f.yhat_lower, yhatUpper: f.yhat_upper,
+    close: null, sentiment: null,
   }))
+
+  const priceChartData = [
+    ...base.map((d, i) => ({
+      ...d,
+      bbUpper:   bb[i].upper,
+      bbMid:     bb[i].mid,
+      bbLower:   bb[i].lower,
+      yhat:      null,
+      yhatLower: null,
+      yhatUpper: null,
+    })),
+    ...futureRows,
+  ]
+
+  // Inject anchor yhat into the last historical row
+  if (anchorRow.length && priceChartData.length > futureRows.length) {
+    const lastIdx = priceChartData.length - futureRows.length - 1
+    priceChartData[lastIdx].yhat      = lastClose
+    priceChartData[lastIdx].yhatLower = lastClose
+    priceChartData[lastIdx].yhatUpper = lastClose
+  }
 
   const rsiChartData = priceData.map((p, i) => ({
     date: p.date,
@@ -188,9 +220,12 @@ export default function OverlayChart({
         </h2>
         <div className="flex items-center gap-3">
           <div className="flex gap-1.5">
-            <IndicatorBtn label="BB"   active={ind.bb}   onClick={() => toggle('bb')}   />
-            <IndicatorBtn label="RSI"  active={ind.rsi}  onClick={() => toggle('rsi')}  />
-            <IndicatorBtn label="MACD" active={ind.macd} onClick={() => toggle('macd')} />
+            <IndicatorBtn label="BB"       active={ind.bb}       onClick={() => toggle('bb')}       />
+            <IndicatorBtn label="RSI"      active={ind.rsi}      onClick={() => toggle('rsi')}      />
+            <IndicatorBtn label="MACD"     active={ind.macd}     onClick={() => toggle('macd')}     />
+            {forecastRows.length > 0 && (
+              <IndicatorBtn label="Forecast" active={ind.forecast} onClick={() => toggle('forecast')} />
+            )}
           </div>
           {hasSentiment && (
             <p className="text-xs text-slate-600">Click an amber dot to filter news below</p>
@@ -261,6 +296,16 @@ export default function OverlayChart({
                   strokeDasharray="2 3" dot={false} activeDot={false} />
             <Line yAxisId="price" type="monotone" dataKey="bbLower" stroke="#38bdf8" strokeWidth={1}
                   strokeDasharray="4 3" dot={false} activeDot={false} />
+          </>}
+
+          {/* Forecast lines (conditional) */}
+          {ind.forecast && <>
+            <Line yAxisId="price" type="monotone" dataKey="yhatUpper" stroke="#a78bfa"
+                  strokeWidth={1} strokeDasharray="3 3" dot={false} connectNulls={false} />
+            <Line yAxisId="price" type="monotone" dataKey="yhat" stroke="#a78bfa"
+                  strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls={false} />
+            <Line yAxisId="price" type="monotone" dataKey="yhatLower" stroke="#a78bfa"
+                  strokeWidth={1} strokeDasharray="3 3" dot={false} connectNulls={false} />
           </>}
 
           {/* Sentiment line */}

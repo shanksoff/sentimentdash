@@ -7,6 +7,7 @@ import PerformanceStrip from './PerformanceStrip'
 import SentimentPanel from './SentimentPanel'
 import TickerSearch from './TickerSearch'
 import VolatilityPanel from './VolatilityPanel'
+import RegressionPanel from './RegressionPanel'
 
 export default function Dashboard() {
   const [ticker, setTicker] = useState('')
@@ -16,6 +17,8 @@ export default function Dashboard() {
   const [fundamentals, setFundamentals] = useState(null)
   const [incomeStatement, setIncomeStatement] = useState([])
   const [performance, setPerformance] = useState(null)
+  const [forecast, setForecast] = useState(null)
+  const [regression, setRegression] = useState(null)
   const [selectedSentimentDate, setSelectedSentimentDate] = useState(null)
 
   const [loading, setLoading] = useState(false)
@@ -39,14 +42,18 @@ export default function Dashboard() {
     setBootstrapping(false)
     setTicker(sym)
     setSelectedSentimentDate(null)
+    setForecast(null)
+    setRegression(null)
 
     try {
-      const [priceRes, sentRes, fundRes, incRes, perfRes] = await Promise.allSettled([
+      const [priceRes, sentRes, fundRes, incRes, perfRes, forecastRes, regressionRes] = await Promise.allSettled([
         axios.get(`/api/price/${sym}`),
         axios.get(`/api/sentiment/${sym}`),
         axios.get(`/api/fundamentals/${sym}`),
         axios.get(`/api/income-statement/${sym}`),
         axios.get(`/api/performance/${sym}`),
+        axios.get(`/api/forecast/${sym}`),
+        axios.get(`/api/regression/${sym}`),
       ])
 
       setPrice(priceRes.status === 'fulfilled' ? priceRes.value.data : [])
@@ -55,6 +62,8 @@ export default function Dashboard() {
       setFundamentals(fundRes.status === 'fulfilled' ? fundRes.value.data : null)
       setIncomeStatement(incRes.status === 'fulfilled' ? incRes.value.data : [])
       setPerformance(perfRes.status === 'fulfilled' ? perfRes.value.data : null)
+      setForecast(forecastRes.status === 'fulfilled' ? forecastRes.value.data : null)
+      setRegression(regressionRes.status === 'fulfilled' ? regressionRes.value.data : null)
 
       const allFailed = [priceRes, sentRes, fundRes, incRes, perfRes]
         .every(r => r.status === 'rejected')
@@ -149,6 +158,7 @@ export default function Dashboard() {
                   ticker={ticker}
                   selectedDate={selectedSentimentDate}
                   onSentimentClick={setSelectedSentimentDate}
+                  forecastData={forecast}
                 />
                 <PerformanceStrip data={performance} />
                 <VolatilityPanel priceData={price} />
@@ -161,6 +171,9 @@ export default function Dashboard() {
               selectedDate={selectedSentimentDate}
               onClearDate={() => setSelectedSentimentDate(null)}
             />
+
+            {/* ── Regression analysis ───────────────────────── */}
+            <RegressionPanel data={regression} />
 
             {/* ── Income statement ──────────────────────────── */}
             <IncomeTable data={incomeStatement} />

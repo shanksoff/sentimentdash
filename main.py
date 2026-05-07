@@ -26,6 +26,7 @@ import yfinance as yf
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from analytics import arima_forecast, sentiment_return_regression
 from database import close_pool, get_conn, init_pool
 from fetch_market_data import upsert_price_history, upsert_ticker
 from fetch_news import fetch_for_ticker
@@ -289,6 +290,60 @@ def get_performance(ticker: str) -> dict:
             log.warning("performance computation failed for %s: %s", symbol, exc)
 
     return result
+
+
+# ── Analytics helpers ────────────────────────────────────────────────────────
+
+
+def _fetch_sentiment_rows(conn, symbol: str) -> list:
+    """Minimal sentiment query used by analytics endpoints (score + date only)."""
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT sr.score, ra.published_at
+            FROM sentiment_results sr
+            JOIN rss_articles ra ON ra.id = sr.article_id
+            WHERE sr.ticker = %s
+              AND ra.published_at >= NOW() - INTERVAL '30 days'
+            ORDER BY ra.published_at ASC
+            """,
+            (symbol,),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+@app.get("/api/regression/{ticker}")
+def get_regression(ticker: str) -> dict:
+    """Sentiment[t] → next-day log return[t+1] regression stats + scatter data."""
+    symbol = ticker.upper()
+    with get_conn() as conn:
+        price_rows = _fetch_price_rows(conn, symbol)
+        sent_rows  = _fetch_sentiment_rows(conn, symbol)
+
+    if not price_rows:
+        raise HTTPException(status_code=404, detail=f"No price data for '{symbol}'.")
+
+    return sentiment_return_regression(price_rows, sent_rows)
+
+
+@app.get("/api/forecast/{ticker}")
+def get_forecast(ticker: str) -> dict:
+    """Auto-ARIMA 7-day price forecast with 95 % confidence interval."""
+    symbol = ticker.upper()
+    with get_conn() as conn:
+        price_rows = _fetch_price_rows(conn, symbol)
+
+    if len(price_rows) < 10:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Need at least 10 price observations for '{symbol}'.",
+        )
+
+    try:
+        return arima_forecast(price_rows, horizon=7)
+    except Exception as exc:
+        log.error("ARIMA forecast failed for %s: %s", symbol, exc)
+        raise HTTPException(status_code=500, detail="Forecast computation failed.")
 
 
 # ── Dev entry-point ───────────────────────────────────────────────────────────
