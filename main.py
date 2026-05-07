@@ -318,7 +318,7 @@ def get_regression(ticker: str) -> dict:
     symbol = ticker.upper()
     with get_conn() as conn:
         price_rows = _fetch_price_rows(conn, symbol)
-        sent_rows  = _fetch_sentiment_rows(conn, symbol)
+        sent_rows = _fetch_sentiment_rows(conn, symbol)
 
     if not price_rows:
         raise HTTPException(status_code=404, detail=f"No price data for '{symbol}'.")
