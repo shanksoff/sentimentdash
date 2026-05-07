@@ -7,6 +7,7 @@ import PerformanceStrip from './PerformanceStrip'
 import SentimentPanel from './SentimentPanel'
 import TickerSearch from './TickerSearch'
 import VolatilityPanel from './VolatilityPanel'
+import ForecastPanel from './ForecastPanel'
 import RegressionPanel from './RegressionPanel'
 
 export default function Dashboard() {
@@ -158,10 +159,10 @@ export default function Dashboard() {
                   ticker={ticker}
                   selectedDate={selectedSentimentDate}
                   onSentimentClick={setSelectedSentimentDate}
-                  forecastData={forecast}
                 />
                 <PerformanceStrip data={performance} />
                 <VolatilityPanel priceData={price} />
+                <ForecastPanel forecastData={forecast} priceData={price} ticker={ticker} />
               </div>
             </div>
 

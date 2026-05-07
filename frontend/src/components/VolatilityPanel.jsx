@@ -59,7 +59,7 @@ export default function VolatilityPanel({ priceData }) {
     <div className="card">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-slate-300">
-          20-Day Rolling Volatility (Annualised)
+          Rolling Volatility (20-day window, annualised)
         </h2>
         {currentVol != null && (
           <div className="flex items-center gap-2">

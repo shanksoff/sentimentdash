@@ -157,7 +157,7 @@ def _fetch_price_rows(conn, symbol: str) -> list:
 
 @app.get("/api/price/{ticker}")
 def get_price(ticker: str) -> list[dict]:
-    """1-month OHLCV daily data. Refreshes if latest row is older than 1 day."""
+    """3-month OHLCV daily data. Refreshes if latest row is older than 1 day."""
     symbol = ticker.upper()
     with get_conn() as conn:
         rows = _fetch_price_rows(conn, symbol)

@@ -39,14 +39,20 @@ function mergeData(priceData, sentimentData) {
   }))
 }
 
+// Shared x-axis props — all charts use the same so syncId aligns correctly
 const xAxisProps = {
-  dataKey:      'date',
-  tick:         { fill: '#64748b', fontSize: 11 },
-  tickLine:     false,
-  axisLine:     { stroke: '#2a2f3d' },
+  dataKey:       'date',
+  tick:          { fill: '#64748b', fontSize: 11 },
+  tickLine:      false,
+  axisLine:      { stroke: '#2a2f3d' },
   tickFormatter: d => d.slice(5),
-  interval:     'preserveStartEnd',
+  interval:      'preserveStartEnd',
 }
+
+// All sub-charts must match the main chart's left YAxis width (60) and
+// right YAxis width (50) so the plot areas are pixel-aligned when syncId syncs.
+const LEFT_W  = 60
+const RIGHT_W = 50
 
 // ─── Tooltips ────────────────────────────────────────────────
 
@@ -57,9 +63,6 @@ function PriceTooltip({ active, payload, label }) {
     <div className="card text-xs space-y-1 shadow-xl">
       <p className="text-slate-400 font-medium">{label}</p>
       {map.close     && <p className="text-emerald-400">Price: ${map.close.value?.toFixed(2)}</p>}
-      {map.yhat      && <p className="text-violet-400">Forecast: ${map.yhat.value?.toFixed(2)}</p>}
-      {map.yhatUpper && <p className="text-violet-300/70">CI Upper: ${map.yhatUpper.value?.toFixed(2)}</p>}
-      {map.yhatLower && <p className="text-violet-300/70">CI Lower: ${map.yhatLower.value?.toFixed(2)}</p>}
       {map.sentiment && <p className="text-amber-400">Sentiment: {map.sentiment.value?.toFixed(1)}/10</p>}
       {map.bbUpper   && <p className="text-sky-400">BB Upper: ${map.bbUpper.value?.toFixed(2)}</p>}
       {map.bbMid     && <p className="text-sky-300">BB Mid: ${map.bbMid.value?.toFixed(2)}</p>}
@@ -134,9 +137,10 @@ function IndicatorBtn({ label, active, onClick }) {
 // ─── Main component ──────────────────────────────────────────
 
 export default function OverlayChart({
-  priceData, sentimentData, ticker, selectedDate, onSentimentClick, forecastData,
+  priceData, sentimentData, ticker, selectedDate, onSentimentClick,
 }) {
-  const [ind, setInd] = useState({ bb: false, rsi: false, macd: false, forecast: false })
+  // All indicators on by default — user can toggle off
+  const [ind, setInd] = useState({ bb: true, rsi: true, macd: true })
   const toggle = key => setInd(prev => ({ ...prev, [key]: !prev[key] }))
 
   const base = mergeData(priceData, sentimentData)
@@ -156,41 +160,12 @@ export default function OverlayChart({
   const { macdLine, signalLine, histogram } = calcMACD(closes)
 
   // ── Build chart datasets ────────────────────────────────────
-  const lastClose = closes[closes.length - 1]
-  const lastDate  = base[base.length - 1]?.date
-
-  // Merge forecast into chart data: historical rows get null for forecast keys,
-  // forecast rows get null for close/sentiment/BB.
-  // The last historical point is used as the anchor so the line connects.
-  const forecastRows = forecastData?.forecast ?? []
-  const anchorRow = forecastRows.length > 0
-    ? [{ date: lastDate, yhat: lastClose, yhatLower: lastClose, yhatUpper: lastClose }]
-    : []
-  const futureRows = forecastRows.map(f => ({
-    date: f.date, yhat: f.yhat, yhatLower: f.yhat_lower, yhatUpper: f.yhat_upper,
-    close: null, sentiment: null,
+  const priceChartData = base.map((d, i) => ({
+    ...d,
+    bbUpper: bb[i].upper,
+    bbMid:   bb[i].mid,
+    bbLower: bb[i].lower,
   }))
-
-  const priceChartData = [
-    ...base.map((d, i) => ({
-      ...d,
-      bbUpper:   bb[i].upper,
-      bbMid:     bb[i].mid,
-      bbLower:   bb[i].lower,
-      yhat:      null,
-      yhatLower: null,
-      yhatUpper: null,
-    })),
-    ...futureRows,
-  ]
-
-  // Inject anchor yhat into the last historical row
-  if (anchorRow.length && priceChartData.length > futureRows.length) {
-    const lastIdx = priceChartData.length - futureRows.length - 1
-    priceChartData[lastIdx].yhat      = lastClose
-    priceChartData[lastIdx].yhatLower = lastClose
-    priceChartData[lastIdx].yhatUpper = lastClose
-  }
 
   const rsiChartData = priceData.map((p, i) => ({
     date: p.date,
@@ -205,27 +180,24 @@ export default function OverlayChart({
   }))
 
   // ── Price chart domain ──────────────────────────────────────
-  const prices   = closes
-  const priceMin = Math.floor(Math.min(...prices) * 0.995)
-  const priceMax = Math.ceil(Math.max(...prices) * 1.005)
+  const priceMin = Math.floor(Math.min(...closes) * 0.995)
+  const priceMax = Math.ceil(Math.max(...closes) * 1.005)
 
   const hasSentiment = base.some(d => d.sentiment != null)
+  const days = priceData.length
 
   return (
     <div className="card space-y-0">
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-slate-300">
-          {ticker} — 30-Day Price &amp; Sentiment Overlay
+          {ticker} — {days}-Day Price &amp; Sentiment Overlay
         </h2>
         <div className="flex items-center gap-3">
           <div className="flex gap-1.5">
-            <IndicatorBtn label="BB"       active={ind.bb}       onClick={() => toggle('bb')}       />
-            <IndicatorBtn label="RSI"      active={ind.rsi}      onClick={() => toggle('rsi')}      />
-            <IndicatorBtn label="MACD"     active={ind.macd}     onClick={() => toggle('macd')}     />
-            {forecastRows.length > 0 && (
-              <IndicatorBtn label="Forecast" active={ind.forecast} onClick={() => toggle('forecast')} />
-            )}
+            <IndicatorBtn label="BB"   active={ind.bb}   onClick={() => toggle('bb')}   />
+            <IndicatorBtn label="RSI"  active={ind.rsi}  onClick={() => toggle('rsi')}  />
+            <IndicatorBtn label="MACD" active={ind.macd} onClick={() => toggle('macd')} />
           </div>
           {hasSentiment && (
             <p className="text-xs text-slate-600">Click an amber dot to filter news below</p>
@@ -235,7 +207,11 @@ export default function OverlayChart({
 
       {/* ── Price + Sentiment (+ optional BB) ──────────────── */}
       <ResponsiveContainer width="100%" height={300}>
-        <ComposedChart data={priceChartData} syncId="chartSync" margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+        <ComposedChart
+          data={priceChartData}
+          syncId="chartSync"
+          margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3d" vertical={false} />
           <XAxis {...xAxisProps} />
           <YAxis
@@ -246,7 +222,7 @@ export default function OverlayChart({
             tickLine={false}
             axisLine={false}
             tickFormatter={v => `$${v}`}
-            width={60}
+            width={LEFT_W}
           />
           <YAxis
             yAxisId="sentiment"
@@ -256,7 +232,7 @@ export default function OverlayChart({
             tickLine={false}
             axisLine={false}
             tickFormatter={v => `${v}/10`}
-            width={50}
+            width={RIGHT_W}
           />
           <Tooltip content={<PriceTooltip />} />
           <Legend
@@ -276,7 +252,6 @@ export default function OverlayChart({
             </linearGradient>
           </defs>
 
-          {/* Price area */}
           <Area
             yAxisId="price"
             type="monotone"
@@ -288,27 +263,15 @@ export default function OverlayChart({
             activeDot={{ r: 4, fill: '#10b981' }}
           />
 
-          {/* Bollinger Bands (conditional) */}
           {ind.bb && <>
-            <Line yAxisId="price" type="monotone" dataKey="bbUpper" stroke="#38bdf8" strokeWidth={1}
-                  strokeDasharray="4 3" dot={false} activeDot={false} />
-            <Line yAxisId="price" type="monotone" dataKey="bbMid"   stroke="#7dd3fc" strokeWidth={1}
-                  strokeDasharray="2 3" dot={false} activeDot={false} />
-            <Line yAxisId="price" type="monotone" dataKey="bbLower" stroke="#38bdf8" strokeWidth={1}
-                  strokeDasharray="4 3" dot={false} activeDot={false} />
+            <Line yAxisId="price" type="monotone" dataKey="bbUpper" stroke="#38bdf8"
+                  strokeWidth={1} strokeDasharray="4 3" dot={false} activeDot={false} />
+            <Line yAxisId="price" type="monotone" dataKey="bbMid"   stroke="#7dd3fc"
+                  strokeWidth={1} strokeDasharray="2 3" dot={false} activeDot={false} />
+            <Line yAxisId="price" type="monotone" dataKey="bbLower" stroke="#38bdf8"
+                  strokeWidth={1} strokeDasharray="4 3" dot={false} activeDot={false} />
           </>}
 
-          {/* Forecast lines (conditional) */}
-          {ind.forecast && <>
-            <Line yAxisId="price" type="monotone" dataKey="yhatUpper" stroke="#a78bfa"
-                  strokeWidth={1} strokeDasharray="3 3" dot={false} connectNulls={false} />
-            <Line yAxisId="price" type="monotone" dataKey="yhat" stroke="#a78bfa"
-                  strokeWidth={2} strokeDasharray="5 3" dot={false} connectNulls={false} />
-            <Line yAxisId="price" type="monotone" dataKey="yhatLower" stroke="#a78bfa"
-                  strokeWidth={1} strokeDasharray="3 3" dot={false} connectNulls={false} />
-          </>}
-
-          {/* Sentiment line */}
           <Line
             yAxisId="sentiment"
             type="monotone"
@@ -341,31 +304,31 @@ export default function OverlayChart({
       {ind.rsi && (
         <div className="mt-4 pt-4 border-t border-border">
           <p className="text-xs text-slate-500 mb-2 font-mono">RSI (14)</p>
-          <ResponsiveContainer width="100%" height={130}>
-            <ComposedChart data={rsiChartData} syncId="chartSync" margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+          <ResponsiveContainer width="100%" height={120}>
+            <ComposedChart
+              data={rsiChartData}
+              syncId="chartSync"
+              margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3d" vertical={false} />
               <XAxis {...xAxisProps} />
+              {/* Match LEFT_W exactly so plot area aligns with price chart */}
               <YAxis
                 domain={[0, 100]}
                 tick={{ fill: '#64748b', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
                 ticks={[0, 30, 50, 70, 100]}
-                width={30}
+                width={LEFT_W}
               />
+              {/* Hidden right axis reserves the same space as the price chart's right axis */}
+              <YAxis yAxisId="r" orientation="right" width={RIGHT_W} hide />
               <Tooltip content={<RSITooltip />} />
-              {/* Overbought / oversold bands */}
               <ReferenceLine y={70} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} />
               <ReferenceLine y={50} stroke="#64748b" strokeDasharray="2 4" strokeOpacity={0.4} />
               <ReferenceLine y={30} stroke="#10b981" strokeDasharray="3 3" strokeOpacity={0.5} />
-              <Line
-                type="monotone"
-                dataKey="rsi"
-                stroke="#a78bfa"
-                strokeWidth={2}
-                dot={false}
-                connectNulls={false}
-              />
+              <Line type="monotone" dataKey="rsi" stroke="#a78bfa" strokeWidth={2}
+                    dot={false} connectNulls={false} />
             </ComposedChart>
           </ResponsiveContainer>
           <div className="flex gap-4 mt-1 text-[10px] text-slate-600">
@@ -379,31 +342,39 @@ export default function OverlayChart({
       {ind.macd && (
         <div className="mt-4 pt-4 border-t border-border">
           <p className="text-xs text-slate-500 mb-2 font-mono">MACD (12, 26, 9)</p>
-          <ResponsiveContainer width="100%" height={130}>
-            <ComposedChart data={macdChartData} syncId="chartSync" margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+          <ResponsiveContainer width="100%" height={120}>
+            <ComposedChart
+              data={macdChartData}
+              syncId="chartSync"
+              margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3d" vertical={false} />
               <XAxis {...xAxisProps} />
               <YAxis
                 tick={{ fill: '#64748b', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
-                width={45}
-                tickFormatter={v => v.toFixed(2)}
+                width={LEFT_W}
+                tickFormatter={v => v.toFixed(1)}
               />
+              <YAxis yAxisId="r" orientation="right" width={RIGHT_W} hide />
               <Tooltip content={<MACDTooltip />} />
               <ReferenceLine y={0} stroke="#64748b" strokeOpacity={0.4} />
-              {/* Histogram bars, green when positive, red when negative */}
               <Bar dataKey="histogram" barSize={4}>
                 {macdChartData.map((entry, i) => (
                   <Cell
                     key={`cell-${i}`}
-                    fill={entry.histogram == null ? 'transparent' : entry.histogram >= 0 ? '#10b981' : '#ef4444'}
+                    fill={entry.histogram == null
+                      ? 'transparent'
+                      : entry.histogram >= 0 ? '#10b981' : '#ef4444'}
                     fillOpacity={0.7}
                   />
                 ))}
               </Bar>
-              <Line type="monotone" dataKey="macd"   stroke="#60a5fa" strokeWidth={1.5} dot={false} connectNulls={false} />
-              <Line type="monotone" dataKey="signal" stroke="#fb923c" strokeWidth={1.5} dot={false} connectNulls={false} />
+              <Line type="monotone" dataKey="macd"   stroke="#60a5fa" strokeWidth={1.5}
+                    dot={false} connectNulls={false} />
+              <Line type="monotone" dataKey="signal" stroke="#fb923c" strokeWidth={1.5}
+                    dot={false} connectNulls={false} />
             </ComposedChart>
           </ResponsiveContainer>
           <div className="flex gap-4 mt-1 text-[10px] text-slate-600">

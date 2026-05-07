@@ -150,7 +150,7 @@ def upsert_ticker(conn, symbol: str):
 def upsert_price_history(conn, symbol: str):
     ticker = yf.Ticker(symbol)
     end = date.today() + timedelta(days=1)  # yfinance end is exclusive
-    start = end - timedelta(days=31)
+    start = end - timedelta(days=91)        # 3 months — enough for MACD(12,26,9)
     hist = ticker.history(start=start.isoformat(), end=end.isoformat(), interval="1d")
 
     if hist.empty:
