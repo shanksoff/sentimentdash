@@ -78,7 +78,7 @@ export default function VolatilityPanel({ priceData }) {
       </div>
 
       <ResponsiveContainer width="100%" height={140}>
-        <AreaChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+        <AreaChart data={chartData} syncId="chartSync" margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3d" vertical={false} />
           <XAxis
             dataKey="date"
