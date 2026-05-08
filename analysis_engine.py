@@ -15,7 +15,8 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 log = logging.getLogger("uvicorn.error")
 
-MODEL = "gemini-3.1-flash-lite-preview"
+MODEL      = "gemini-3.1-flash-lite-preview"
+CHAT_MODEL = "gemini-3.1-flash-lite-preview"
 
 PROMPT_TEMPLATE = """You are a concise financial analyst assistant. Analyse the data below for {ticker}{company_suffix} and produce a structured briefing.
 
@@ -92,6 +93,70 @@ def _call_gemini(client: genai.Client, prompt: str) -> dict:
         if text.startswith("json"):
             text = text[4:]
     return json.loads(text.strip())
+
+
+_CHAT_PROMPT = """\
+You are a concise financial analyst. Answer the user's question about {ticker}{company_suffix} \
+based on the data below. Be direct, specific, and professional. 2-4 sentences maximum.
+
+## Current Data for {ticker}
+Price action (last 5 days):
+{price_table}
+
+Recent news sentiment (last 7 articles, scale 1-10):
+{sentiment_table}
+
+7-day forecast direction: {forecast_direction}
+ML signal ({horizon_days}-day): {signal} | P(price up): {prob_pct}%
+
+Question: {question}"""
+
+
+def stream_chat_response(
+    client: genai.Client,
+    ticker: str,
+    question: str,
+    company_name: str | None = None,
+    price_rows: list[dict] | None = None,
+    sentiment_rows: list[dict] | None = None,
+    forecast: dict | None = None,
+    prediction: dict | None = None,
+):
+    """Yields text chunks from a streaming Gemini response."""
+    price_table = _fmt_price_table(price_rows) if price_rows else "No data."
+    sentiment_table = _fmt_sentiment_table(sentiment_rows) if sentiment_rows else "No data."
+    company_suffix = f" ({company_name})" if company_name else ""
+
+    if forecast and forecast.get("forecast"):
+        last_close = float(price_rows[-1]["close"]) if price_rows else 0
+        fc = forecast["forecast"][-1]
+        pct_chg = (fc["yhat"] - last_close) / last_close * 100 if last_close else 0
+        forecast_direction = f"{'Up' if pct_chg >= 0 else 'Down'} {abs(pct_chg):.1f}% over 7 days"
+    else:
+        forecast_direction = "Unavailable"
+
+    if prediction and not prediction.get("error"):
+        signal      = prediction.get("signal", "Hold")
+        prob_pct    = round(prediction.get("prob_up", 0.5) * 100, 1)
+        horizon_days = prediction.get("horizon_days", 5)
+    else:
+        signal, prob_pct, horizon_days = "Hold", 50.0, 5
+
+    prompt = _CHAT_PROMPT.format(
+        ticker=ticker,
+        company_suffix=company_suffix,
+        price_table=price_table,
+        sentiment_table=sentiment_table,
+        forecast_direction=forecast_direction,
+        signal=signal,
+        prob_pct=prob_pct,
+        horizon_days=horizon_days,
+        question=question,
+    )
+
+    for chunk in client.models.generate_content_stream(model=CHAT_MODEL, contents=prompt):
+        if chunk.text:
+            yield chunk.text
 
 
 # ── Public function ───────────────────────────────────────────────────────────
