@@ -7,7 +7,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Application source
-COPY database.py fetch_market_data.py fetch_news.py sentiment_engine.py analytics.py main.py ./
+COPY database.py fetch_market_data.py fetch_news.py sentiment_engine.py analytics.py analysis_engine.py main.py ./
 
 EXPOSE 8000
 

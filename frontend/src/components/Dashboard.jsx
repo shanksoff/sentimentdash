@@ -9,6 +9,9 @@ import TickerSearch from './TickerSearch'
 import VolatilityPanel from './VolatilityPanel'
 import ForecastPanel from './ForecastPanel'
 import RegressionPanel from './RegressionPanel'
+import PredictionPanel from './PredictionPanel'
+import AnalysisPanel from './AnalysisPanel'
+import SentimentPriceChart from './SentimentPriceChart'
 
 export default function Dashboard() {
   const [ticker, setTicker] = useState('')
@@ -20,6 +23,9 @@ export default function Dashboard() {
   const [performance, setPerformance] = useState(null)
   const [forecast, setForecast] = useState(null)
   const [regression, setRegression] = useState(null)
+  const [prediction, setPrediction] = useState(null)
+  const [analysis, setAnalysis] = useState(null)
+  const [analysisLoading, setAnalysisLoading] = useState(false)
   const [selectedSentimentDate, setSelectedSentimentDate] = useState(null)
 
   const [loading, setLoading] = useState(false)
@@ -45,9 +51,11 @@ export default function Dashboard() {
     setSelectedSentimentDate(null)
     setForecast(null)
     setRegression(null)
+    setPrediction(null)
+    setAnalysis(null)
 
     try {
-      const [priceRes, sentRes, fundRes, incRes, perfRes, forecastRes, regressionRes] = await Promise.allSettled([
+      const [priceRes, sentRes, fundRes, incRes, perfRes, forecastRes, regressionRes, predictionRes] = await Promise.allSettled([
         axios.get(`/api/price/${sym}`),
         axios.get(`/api/sentiment/${sym}`),
         axios.get(`/api/fundamentals/${sym}`),
@@ -55,6 +63,7 @@ export default function Dashboard() {
         axios.get(`/api/performance/${sym}`),
         axios.get(`/api/forecast/${sym}`),
         axios.get(`/api/regression/${sym}`),
+        axios.get(`/api/prediction/${sym}`),
       ])
 
       setPrice(priceRes.status === 'fulfilled' ? priceRes.value.data : [])
@@ -65,6 +74,14 @@ export default function Dashboard() {
       setPerformance(perfRes.status === 'fulfilled' ? perfRes.value.data : null)
       setForecast(forecastRes.status === 'fulfilled' ? forecastRes.value.data : null)
       setRegression(regressionRes.status === 'fulfilled' ? regressionRes.value.data : null)
+      setPrediction(predictionRes.status === 'fulfilled' ? predictionRes.value.data : null)
+
+      // AI analysis fires after main data — Gemini takes a few seconds
+      setAnalysisLoading(true)
+      axios.get(`/api/analysis/${sym}`)
+        .then(r => setAnalysis(r.data))
+        .catch(() => setAnalysis(null))
+        .finally(() => setAnalysisLoading(false))
 
       const allFailed = [priceRes, sentRes, fundRes, incRes, perfRes]
         .every(r => r.status === 'rejected')
@@ -166,15 +183,24 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* ── AI analyst briefing ───────────────────────── */}
+            <AnalysisPanel data={analysis} loading={analysisLoading} />
+
+            {/* ── Prediction signal ─────────────────────────── */}
+            <PredictionPanel data={prediction} ticker={ticker} forecastData={forecast} priceData={price} />
+
+            {/* ── Regression analysis ───────────────────────── */}
+            <RegressionPanel data={regression} />
+
+            {/* ── Price vs sentiment overlay ────────────────── */}
+            <SentimentPriceChart priceData={price} sentimentData={sentiment} ticker={ticker} />
+
             {/* ── Sentiment news feed ───────────────────────── */}
             <SentimentPanel
               articles={sentiment}
               selectedDate={selectedSentimentDate}
               onClearDate={() => setSelectedSentimentDate(null)}
             />
-
-            {/* ── Regression analysis ───────────────────────── */}
-            <RegressionPanel data={regression} />
 
             {/* ── Income statement ──────────────────────────── */}
             <IncomeTable data={incomeStatement} />

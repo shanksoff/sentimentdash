@@ -4,11 +4,15 @@ FastAPI backend for the Stock Sentiment & Analytics Dashboard.
 
 Endpoints
 ---------
-GET /api/price/{ticker}            1-month OHLCV daily data
+GET /api/price/{ticker}            3-month OHLCV daily data
 GET /api/sentiment/{ticker}        Last 30 days of scored articles
 GET /api/fundamentals/{ticker}     All key metrics + dividend data
 GET /api/income-statement/{ticker} 5-year income statement table
 GET /api/performance/{ticker}      Relative perf (1M / 3M / 6M / 12M)
+GET /api/forecast/{ticker}         Auto-ARIMA 7-day price forecast
+GET /api/regression/{ticker}       Sentiment → return regression stats
+GET /api/prediction/{ticker}       Random Forest Watch/Hold/Avoid signal
+GET /api/analysis/{ticker}         Gemini AI analyst briefing (1-hr cache)
 
 Sentiment data is populated by scheduler.py (runs daily).
 When a ticker has no scored articles yet, get_sentiment fires a one-time
@@ -18,7 +22,7 @@ background bootstrap (fetch + score) so data appears within ~60 seconds.
 import logging
 import threading
 from contextlib import asynccontextmanager
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import psycopg2.extras
@@ -26,7 +30,8 @@ import yfinance as yf
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from analytics import arima_forecast, sentiment_return_regression
+from analysis_engine import generate_analysis
+from analytics import arima_forecast, binary_prediction, sentiment_return_regression
 from database import close_pool, get_conn, init_pool
 from fetch_market_data import upsert_price_history, upsert_ticker
 from fetch_news import fetch_for_ticker
@@ -37,6 +42,10 @@ log = logging.getLogger("uvicorn.error")
 # Tickers currently being bootstrapped in the background
 _bootstrap_lock = threading.Lock()
 _bootstrapping: set[str] = set()
+
+# In-memory cache for AI analysis results  { symbol: {"data": dict, "ts": datetime} }
+_analysis_cache: dict[str, dict] = {}
+_ANALYSIS_TTL_SECONDS = 3600  # regenerate after 1 hour
 
 
 def _bootstrap_sentiment(symbol: str) -> None:
@@ -344,6 +353,87 @@ def get_forecast(ticker: str) -> dict:
     except Exception as exc:
         log.error("ARIMA forecast failed for %s: %s", symbol, exc)
         raise HTTPException(status_code=500, detail="Forecast computation failed.")
+
+
+@app.get("/api/prediction/{ticker}")
+def get_prediction(ticker: str) -> dict:
+    """Random Forest 5-day up/down prediction → Watch / Hold / Avoid signal."""
+    symbol = ticker.upper()
+    with get_conn() as conn:
+        price_rows = _fetch_price_rows(conn, symbol)
+        sent_rows = _fetch_sentiment_rows(conn, symbol)
+
+    if len(price_rows) < 20:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Need at least 20 price observations for '{symbol}'.",
+        )
+
+    try:
+        return binary_prediction(price_rows, sent_rows)
+    except Exception as exc:
+        log.error("Prediction failed for %s: %s", symbol, exc)
+        raise HTTPException(status_code=500, detail="Prediction computation failed.")
+
+
+@app.get("/api/analysis/{ticker}")
+def get_analysis(ticker: str) -> dict:
+    """Gemini AI analyst briefing combining price, sentiment, forecast and prediction."""
+    symbol = ticker.upper()
+
+    # Serve from cache if fresh
+    cached = _analysis_cache.get(symbol)
+    if cached:
+        age = (datetime.now(timezone.utc) - cached["ts"]).total_seconds()
+        if age < _ANALYSIS_TTL_SECONDS:
+            return cached["data"]
+
+    # Gather all inputs in parallel (best-effort — missing data is handled gracefully)
+    with get_conn() as conn:
+        price_rows = _fetch_price_rows(conn, symbol)
+        sent_rows = _fetch_sentiment_rows(conn, symbol)
+
+    forecast_data = None
+    prediction_data = None
+    company_name = None
+
+    try:
+        forecast_data = arima_forecast(price_rows, horizon=7) if len(price_rows) >= 10 else None
+    except Exception:
+        pass
+
+    try:
+        prediction_data = binary_prediction(price_rows, sent_rows) if len(price_rows) >= 20 else None
+    except Exception:
+        pass
+
+    try:
+        with get_conn() as conn:
+            row = _query_ticker(conn, symbol)
+        company_name = row.get("company_name") if row else None
+    except Exception:
+        pass
+
+    if not price_rows and not sent_rows:
+        raise HTTPException(status_code=404, detail=f"No data available for '{symbol}'.")
+
+    try:
+        client = make_client()
+        result = generate_analysis(
+            client=client,
+            ticker=symbol,
+            company_name=company_name,
+            price_rows=price_rows,
+            sentiment_rows=sent_rows,
+            forecast=forecast_data,
+            prediction=prediction_data,
+        )
+    except Exception as exc:
+        log.error("AI analysis failed for %s: %s", symbol, exc)
+        raise HTTPException(status_code=500, detail="AI analysis generation failed.")
+
+    _analysis_cache[symbol] = {"data": result, "ts": datetime.now(timezone.utc)}
+    return result
 
 
 # ── Dev entry-point ───────────────────────────────────────────────────────────
