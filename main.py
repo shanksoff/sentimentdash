@@ -436,6 +436,59 @@ def get_analysis(ticker: str) -> dict:
     return result
 
 
+@app.get("/api/tickers")
+def get_tickers() -> list[dict]:
+    """All tracked tickers with latest price and 1-day % change for the sidebar."""
+    symbols = [
+        "NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "GOOG", "AVGO", "META",
+        "TSLA", "WMT", "BRK-B", "LLY", "JPM", "MU", "AMD", "XOM",
+        "V", "INTC", "ORCL", "JNJ", "COST", "MA", "CAT", "BAC", "NFLX",
+        "SPY",
+    ]
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT
+                    t.symbol,
+                    t.company_name,
+                    ph_latest.close  AS latest_price,
+                    ph_prev.close    AS prev_price
+                FROM tickers t
+                LEFT JOIN LATERAL (
+                    SELECT close FROM price_history
+                    WHERE ticker = t.symbol
+                    ORDER BY date DESC LIMIT 1
+                ) ph_latest ON true
+                LEFT JOIN LATERAL (
+                    SELECT close FROM price_history
+                    WHERE ticker = t.symbol
+                    ORDER BY date DESC LIMIT 1 OFFSET 1
+                ) ph_prev ON true
+                WHERE t.symbol = ANY(%s)
+                ORDER BY t.symbol
+                """,
+                (symbols,),
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+
+    result = []
+    for row in rows:
+        latest = _dec_to_float(row.get("latest_price"))
+        prev = _dec_to_float(row.get("prev_price"))
+        pct = round((latest - prev) / prev * 100, 2) if latest and prev else None
+        result.append({
+            "symbol": row["symbol"],
+            "company_name": row.get("company_name"),
+            "latest_price": latest,
+            "pct_change": pct,
+        })
+
+    order = {s: i for i, s in enumerate(symbols)}
+    result.sort(key=lambda r: order.get(r["symbol"], 999))
+    return result
+
+
 # ── Dev entry-point ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
