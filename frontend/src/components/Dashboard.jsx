@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import axios from 'axios'
+import TickerSidebar from './TickerSidebar'
 import OverlayChart from './OverlayChart'
 import IncomeTable from './IncomeTable'
 import SentimentPanel from './SentimentPanel'
@@ -270,10 +271,9 @@ export default function Dashboard() {
       {/* ── 4-Column Body ────────────────────────────────────── */}
       <main className="flex-1 flex gap-1.5 p-1.5 overflow-hidden min-h-0">
 
-        {/* Col 1 — Ticker Sidebar (placeholder) */}
-        <div className="w-44 shrink-0 card overflow-auto flex flex-col">
-          <p className="metric-label mb-3">Tickers</p>
-          <p className="text-slate-600 text-xs italic">Loading sidebar…</p>
+        {/* Col 1 — Ticker Sidebar */}
+        <div className="w-44 shrink-0 flex flex-col overflow-hidden">
+          <TickerSidebar activeTicker={ticker} onSelect={fetchAll} />
         </div>
 
         {/* Col 2 — Signal / Performance / Fundamentals */}
