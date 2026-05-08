@@ -25,12 +25,16 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
+import json
+
 import psycopg2.extras
 import yfinance as yf
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
-from analysis_engine import generate_analysis
+from analysis_engine import generate_analysis, stream_chat_response
 from analytics import arima_forecast, binary_prediction, sentiment_return_regression
 from database import close_pool, get_conn, init_pool
 from fetch_market_data import upsert_price_history, upsert_ticker
@@ -170,9 +174,7 @@ def get_price(ticker: str) -> list[dict]:
     symbol = ticker.upper()
     with get_conn() as conn:
         rows = _fetch_price_rows(conn, symbol)
-        stale = not rows or str(rows[-1]["date"]) < str(
-            date.today() - timedelta(days=1)
-        )
+        stale = not rows or str(rows[-1]["date"]) < str(date.today())
         if stale:
             try:
                 upsert_price_history(conn, symbol)
@@ -436,14 +438,71 @@ def get_analysis(ticker: str) -> dict:
     return result
 
 
+class ChatRequest(BaseModel):
+    question: str
+
+
+@app.post("/api/chat/{ticker}")
+def post_chat(ticker: str, body: ChatRequest):
+    """Stream a Gemini answer to a predefined question about the ticker."""
+    symbol = ticker.upper()
+
+    with get_conn() as conn:
+        price_rows = _fetch_price_rows(conn, symbol)
+        sent_rows  = _fetch_sentiment_rows(conn, symbol)
+
+    forecast_data   = None
+    prediction_data = None
+    company_name    = None
+
+    try:
+        forecast_data = arima_forecast(price_rows, horizon=7) if len(price_rows) >= 10 else None
+    except Exception:
+        pass
+
+    try:
+        prediction_data = binary_prediction(price_rows, sent_rows) if len(price_rows) >= 20 else None
+    except Exception:
+        pass
+
+    try:
+        with get_conn() as conn:
+            row = _query_ticker(conn, symbol)
+        company_name = row.get("company_name") if row else None
+    except Exception:
+        pass
+
+    client = make_client()
+
+    def generate():
+        try:
+            for text in stream_chat_response(
+                client=client,
+                ticker=symbol,
+                question=body.question,
+                company_name=company_name,
+                price_rows=price_rows,
+                sentiment_rows=sent_rows,
+                forecast=forecast_data,
+                prediction=prediction_data,
+            ):
+                yield f"data: {json.dumps({'text': text})}\n\n"
+        except Exception as exc:
+            log.error("chat stream error for %s: %s", symbol, exc)
+            yield f"data: {json.dumps({'text': '[Error generating response]'})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
 @app.get("/api/tickers")
 def get_tickers() -> list[dict]:
     """All tracked tickers with latest price and 1-day % change for the sidebar."""
     symbols = [
+        "SPY",
         "NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "GOOG", "AVGO", "META",
         "TSLA", "WMT", "BRK-B", "LLY", "JPM", "MU", "AMD", "XOM",
         "V", "INTC", "ORCL", "JNJ", "COST", "MA", "CAT", "BAC", "NFLX",
-        "SPY",
     ]
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:

@@ -159,37 +159,41 @@ export default function OverlayChart({
   const rsiVals = calcRSI(closes)
   const { macdLine, signalLine, histogram } = calcMACD(closes)
 
-  // ── Build chart datasets ────────────────────────────────────
-  const priceChartData = base.map((d, i) => ({
+  // ── Slice to last 30 trading days for display (indicators computed on full data) ──
+  const DISPLAY_DAYS = 30
+  const sliceStart = Math.max(0, priceData.length - DISPLAY_DAYS)
+
+  const priceChartData = base.slice(sliceStart).map((d, j) => ({
     ...d,
-    bbUpper: bb[i].upper,
-    bbMid:   bb[i].mid,
-    bbLower: bb[i].lower,
+    bbUpper: bb[sliceStart + j].upper,
+    bbMid:   bb[sliceStart + j].mid,
+    bbLower: bb[sliceStart + j].lower,
   }))
 
-  const rsiChartData = priceData.map((p, i) => ({
+  const rsiChartData = priceData.slice(sliceStart).map((p, j) => ({
     date: p.date,
-    rsi:  rsiVals[i],
+    rsi:  rsiVals[sliceStart + j],
   }))
 
-  const macdChartData = priceData.map((p, i) => ({
+  const macdChartData = priceData.slice(sliceStart).map((p, j) => ({
     date:      p.date,
-    macd:      macdLine[i],
-    signal:    signalLine[i],
-    histogram: histogram[i],
+    macd:      macdLine[sliceStart + j],
+    signal:    signalLine[sliceStart + j],
+    histogram: histogram[sliceStart + j],
   }))
 
-  // ── Price chart domain ──────────────────────────────────────
-  const priceMin = Math.floor(Math.min(...closes) * 0.995)
-  const priceMax = Math.ceil(Math.max(...closes) * 1.005)
+  // ── Price chart domain (over displayed window only) ─────────
+  const displayCloses = closes.slice(sliceStart)
+  const priceMin = Math.floor(Math.min(...displayCloses) * 0.995)
+  const priceMax = Math.ceil(Math.max(...displayCloses) * 1.005)
 
-  const hasSentiment = base.some(d => d.sentiment != null)
-  const days = priceData.length
+  const hasSentiment = base.slice(sliceStart).some(d => d.sentiment != null)
+  const days = priceChartData.length
 
   return (
     <div className="card space-y-0">
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-2">
         <h2 className="text-sm font-semibold text-slate-300">
           {ticker} — {days}-Day Price &amp; Sentiment Overlay
         </h2>
@@ -206,7 +210,7 @@ export default function OverlayChart({
       </div>
 
       {/* ── Price + Sentiment (+ optional BB) ──────────────── */}
-      <ResponsiveContainer width="100%" height={300}>
+      <ResponsiveContainer width="100%" height={260}>
         <ComposedChart
           data={priceChartData}
           syncId="chartSync"
@@ -302,9 +306,9 @@ export default function OverlayChart({
 
       {/* ── RSI sub-chart ───────────────────────────────────── */}
       {ind.rsi && (
-        <div className="mt-4 pt-4 border-t border-border">
+        <div className="mt-2 pt-2 border-t border-border">
           <p className="text-xs text-slate-500 mb-2 font-mono">RSI (14)</p>
-          <ResponsiveContainer width="100%" height={120}>
+          <ResponsiveContainer width="100%" height={90}>
             <ComposedChart
               data={rsiChartData}
               syncId="chartSync"
@@ -340,9 +344,9 @@ export default function OverlayChart({
 
       {/* ── MACD sub-chart ──────────────────────────────────── */}
       {ind.macd && (
-        <div className="mt-4 pt-4 border-t border-border">
+        <div className="mt-2 pt-2 border-t border-border">
           <p className="text-xs text-slate-500 mb-2 font-mono">MACD (12, 26, 9)</p>
-          <ResponsiveContainer width="100%" height={120}>
+          <ResponsiveContainer width="100%" height={90}>
             <ComposedChart
               data={macdChartData}
               syncId="chartSync"

@@ -107,6 +107,7 @@ export default function ForecastPanel({ forecastData, priceData, ticker }) {
           />
           <YAxis
             domain={[yMin, yMax]}
+            allowDataOverflow={true}
             tick={{ fill: '#64748b', fontSize: 11 }}
             tickLine={false}
             axisLine={false}

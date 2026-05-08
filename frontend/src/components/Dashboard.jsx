@@ -9,6 +9,7 @@ import ForecastPanel from './ForecastPanel'
 import RegressionPanel from './RegressionPanel'
 import AnalysisPanel from './AnalysisPanel'
 import SentimentPriceChart from './SentimentPriceChart'
+import PredictionPanel from './PredictionPanel'
 
 // ─── Col 2 compact components ────────────────────────────────
 
@@ -154,6 +155,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [bootstrapping, setBootstrapping] = useState(false)
+  const [chartTab, setChartTab] = useState('main')
 
   const pollRef = useRef(null)
 
@@ -291,15 +293,67 @@ export default function Dashboard() {
 
         {/* Col 3 — Charts (top) + News (bottom) */}
         <div className="flex-1 min-w-0 flex flex-col gap-1.5 overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-auto">
-            <OverlayChart
-              priceData={price}
-              sentimentData={sentiment}
-              ticker={ticker}
-              selectedDate={selectedSentimentDate}
-              onSentimentClick={setSelectedSentimentDate}
-            />
+
+          {/* Chart pane with tabs */}
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden card p-0">
+            {/* Tab bar */}
+            <div className="flex shrink-0 border-b border-border px-2 pt-2 gap-1 flex-wrap">
+              {[
+                { key: 'main',       label: 'Main' },
+                { key: 'forecast',   label: 'Forecast' },
+                { key: 'prediction', label: '5dF' },
+                { key: 'sentiment',  label: 'Sent. vs Price' },
+                { key: 'regression', label: 'Regression' },
+                { key: 'volatility', label: 'Volatility' },
+                { key: 'income',     label: 'Income Statement' },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setChartTab(key)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors border-b-2 -mb-px ${
+                    chartTab === key
+                      ? 'text-emerald-400 border-emerald-500 bg-emerald-500/5'
+                      : 'text-slate-500 border-transparent hover:text-slate-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Chart content */}
+            <div className="flex-1 min-h-0 overflow-auto p-3">
+              {chartTab === 'main' && (
+                <OverlayChart
+                  priceData={price}
+                  sentimentData={sentiment}
+                  ticker={ticker}
+                  selectedDate={selectedSentimentDate}
+                  onSentimentClick={setSelectedSentimentDate}
+                />
+              )}
+              {chartTab === 'forecast' && (
+                <ForecastPanel forecastData={forecast} priceData={price} ticker={ticker} />
+              )}
+              {chartTab === 'prediction' && (
+                <PredictionPanel data={prediction} ticker={ticker} forecastData={forecast} priceData={price} />
+              )}
+              {chartTab === 'sentiment' && (
+                <SentimentPriceChart priceData={price} sentimentData={sentiment} ticker={ticker} />
+              )}
+              {chartTab === 'regression' && (
+                <RegressionPanel data={regression} />
+              )}
+              {chartTab === 'volatility' && (
+                <VolatilityPanel priceData={price} />
+              )}
+              {chartTab === 'income' && (
+                <IncomeTable data={incomeStatement} />
+              )}
+            </div>
           </div>
+
+          {/* News feed */}
           <div className="h-52 shrink-0 overflow-auto">
             <SentimentPanel
               articles={sentiment}
@@ -311,7 +365,7 @@ export default function Dashboard() {
 
         {/* Col 4 — AI Analysis */}
         <div className="w-64 shrink-0 overflow-auto">
-          <AnalysisPanel data={analysis} loading={analysisLoading} />
+          <AnalysisPanel data={analysis} loading={analysisLoading} ticker={ticker} />
         </div>
 
       </main>

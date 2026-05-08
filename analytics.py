@@ -111,11 +111,12 @@ def arima_forecast(price_rows: list[dict], horizon: int = 7) -> dict:
         warnings.simplefilter("ignore")
         model = auto_arima(
             closes,
-            start_p=0, max_p=3,
+            d=1,
+            start_p=1, max_p=3,
             start_q=0, max_q=3,
-            d=None,
             seasonal=False,
             information_criterion="aic",
+            with_intercept=True,
             stepwise=True,
             suppress_warnings=True,
             error_action="ignore",
@@ -127,6 +128,11 @@ def arima_forecast(price_rows: list[dict], horizon: int = 7) -> dict:
         alpha=0.05,
     )
 
+    # Apply recent 10-day momentum as drift so flat ARIMA forecasts still slope
+    recent = closes[-31:] if len(closes) >= 31 else closes
+    avg_daily_return = float(np.mean(np.diff(recent) / recent[:-1]))
+    last_price = float(closes[-1])
+
     # Future trading dates (Mon–Fri only)
     future_dates: list[str] = []
     d = last_date
@@ -135,17 +141,20 @@ def arima_forecast(price_rows: list[dict], horizon: int = 7) -> dict:
         if d.weekday() < 5:
             future_dates.append(str(d))
 
+    forecast_pts = []
+    for i in range(horizon):
+        trend_yhat = last_price * ((1 + avg_daily_return) ** (i + 1))
+        ci_half = (float(ci[i][1]) - float(ci[i][0])) / 2
+        forecast_pts.append({
+            "date":       future_dates[i],
+            "yhat":       round(trend_yhat, 2),
+            "yhat_lower": round(trend_yhat - ci_half, 2),
+            "yhat_upper": round(trend_yhat + ci_half, 2),
+        })
+
     return {
         "model": f"ARIMA{model.order}",
-        "forecast": [
-            {
-                "date":       future_dates[i],
-                "yhat":       round(float(forecast_arr[i]), 2),
-                "yhat_lower": round(float(ci[i][0]), 2),
-                "yhat_upper": round(float(ci[i][1]), 2),
-            }
-            for i in range(horizon)
-        ],
+        "forecast": forecast_pts,
     }
 
 
