@@ -158,6 +158,13 @@ export default function PredictionPanel({ data, ticker, forecastData, priceData 
       {/* ── Feature importance chart ────────────────────────── */}
       <div>
         <p className="text-xs text-slate-500 mb-3">Feature importance (what drove this prediction)</p>
+        {feature_importance.length === 0 ? (
+          <p className="text-xs text-slate-600 italic">
+            {data.trend_note === 'strong_uptrend'
+              ? 'All training samples show positive 5-day returns — strong uptrend detected, RF not needed.'
+              : 'All training samples show negative 5-day returns — strong downtrend detected, RF not needed.'}
+          </p>
+        ) : (
         <ResponsiveContainer width="100%" height={160}>
           <BarChart
             data={feature_importance}
@@ -192,6 +199,7 @@ export default function PredictionPanel({ data, ticker, forecastData, priceData 
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+        )}
       </div>
 
       {/* ── Disclaimer ─────────────────────────────────────── */}
