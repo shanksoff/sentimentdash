@@ -22,7 +22,7 @@ background bootstrap (fetch + score) so data appears within ~60 seconds.
 import logging
 import threading
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import json
@@ -449,11 +449,11 @@ def post_chat(ticker: str, body: ChatRequest):
 
     with get_conn() as conn:
         price_rows = _fetch_price_rows(conn, symbol)
-        sent_rows  = _fetch_sentiment_rows(conn, symbol)
+        sent_rows = _fetch_sentiment_rows(conn, symbol)
 
-    forecast_data   = None
+    forecast_data = None
     prediction_data = None
-    company_name    = None
+    company_name = None
 
     try:
         forecast_data = arima_forecast(price_rows, horizon=7) if len(price_rows) >= 10 else None
