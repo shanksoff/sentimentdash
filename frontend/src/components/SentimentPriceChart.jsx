@@ -85,15 +85,18 @@ export default function SentimentPriceChart({ priceData, sentimentData, ticker }
   }
 
   return (
-    <div className="card">
-      <h2 className="text-sm font-semibold text-slate-300 mb-1">
-        {ticker} — Price vs Sentiment (30-day)
-      </h2>
-      <p className="text-xs text-slate-600 mb-4">
-        7-day rolling average sentiment overlaid on close price
-      </p>
+    <div className="card h-full flex flex-col">
+      <div className="shrink-0">
+        <h2 className="text-sm font-semibold text-slate-300 mb-1">
+          {ticker} — Price vs Sentiment (30-day)
+        </h2>
+        <p className="text-xs text-slate-600 mb-4">
+          7-day rolling average sentiment overlaid on close price
+        </p>
+      </div>
 
-      <ResponsiveContainer width="100%" height={220}>
+      <div className="flex-1 min-h-0">
+      <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={visible} margin={{ top: 4, right: 50, left: 0, bottom: 0 }} syncId="chartSync">
           <CartesianGrid strokeDasharray="3 3" stroke="#1e2533" />
 
@@ -161,8 +164,9 @@ export default function SentimentPriceChart({ priceData, sentimentData, ticker }
           />
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
 
-      <p className="text-[10px] text-slate-700 mt-2">
+      <p className="text-[10px] text-slate-700 mt-2 shrink-0">
         Sentiment axis: 1 (very negative) → 10 (very positive). Gaps = no news scored that day.
       </p>
     </div>

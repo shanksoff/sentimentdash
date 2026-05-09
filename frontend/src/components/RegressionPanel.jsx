@@ -74,8 +74,8 @@ export default function RegressionPanel({ data }) {
   const magnitude = Math.abs(r) >= 0.5 ? 'strong' : Math.abs(r) >= 0.3 ? 'moderate' : 'weak'
 
   return (
-    <div className="card">
-      <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
+    <div className="card h-full flex flex-col">
+      <div className="flex items-start justify-between mb-4 gap-4 flex-wrap shrink-0">
         <div>
           <h2 className="text-sm font-semibold text-slate-300">
             Sentiment → Next-Day Return (Regression)
@@ -112,7 +112,8 @@ export default function RegressionPanel({ data }) {
         </div>
       </div>
 
-      <ResponsiveContainer width="100%" height={220}>
+      <div className="flex-1 min-h-0">
+      <ResponsiveContainer width="100%" height="100%">
         <ScatterChart margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3d" />
           <XAxis
@@ -161,8 +162,9 @@ export default function RegressionPanel({ data }) {
           />
         </ScatterChart>
       </ResponsiveContainer>
+      </div>
 
-      <p className="text-[10px] text-slate-600 mt-2">
+      <p className="text-[10px] text-slate-600 mt-2 shrink-0">
         Each dot is one trading day: x = avg sentiment score that day, y = log return the following day.
         {p_value <= 0.05
           ? ` The relationship is statistically significant (p = ${p_value}).`

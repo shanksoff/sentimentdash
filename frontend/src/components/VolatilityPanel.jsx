@@ -56,8 +56,8 @@ export default function VolatilityPanel({ priceData }) {
   const yMax = Math.ceil(maxVol / 10) * 10 + 10
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-4">
+    <div className="card h-full flex flex-col">
+      <div className="flex items-center justify-between mb-4 shrink-0">
         <h2 className="text-sm font-semibold text-slate-300">
           Rolling Volatility (20-day window, annualised)
         </h2>
@@ -77,7 +77,8 @@ export default function VolatilityPanel({ priceData }) {
         )}
       </div>
 
-      <ResponsiveContainer width="100%" height={140}>
+      <div className="flex-1 min-h-0">
+      <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={chartData} syncId="chartSync" margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3d" vertical={false} />
           <XAxis
@@ -117,8 +118,9 @@ export default function VolatilityPanel({ priceData }) {
           />
         </AreaChart>
       </ResponsiveContainer>
+      </div>
 
-      <div className="flex gap-4 mt-2 text-[10px] text-slate-600">
+      <div className="flex gap-4 mt-2 text-[10px] text-slate-600 shrink-0">
         <span className="text-emerald-400/70">— &lt;20% low</span>
         <span className="text-amber-400/70">— 20–40% moderate</span>
         <span className="text-red-400/70">— &gt;40% high</span>

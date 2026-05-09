@@ -81,8 +81,8 @@ export default function ForecastPanel({ forecastData, priceData, ticker }) {
   const splitDate = historyWindow[historyWindow.length - 1].date
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-4">
+    <div className="card h-full flex flex-col">
+      <div className="flex items-center justify-between mb-4 shrink-0">
         <div>
           <h2 className="text-sm font-semibold text-slate-300">
             {ticker} — 7-Day Price Forecast
@@ -94,7 +94,8 @@ export default function ForecastPanel({ forecastData, priceData, ticker }) {
         </div>
       </div>
 
-      <ResponsiveContainer width="100%" height={200}>
+      <div className="flex-1 min-h-0">
+      <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#2a2f3d" vertical={false} />
           <XAxis
@@ -182,8 +183,9 @@ export default function ForecastPanel({ forecastData, priceData, ticker }) {
           />
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
 
-      <div className="flex gap-4 mt-2 text-[10px] text-slate-600">
+      <div className="flex gap-4 mt-2 text-[10px] text-slate-600 shrink-0">
         <span className="text-emerald-400/70">— Actual price</span>
         <span className="text-violet-400/70">— Forecast</span>
         <span style={{ color: '#a78bfa44' }}>▮ 95% CI</span>

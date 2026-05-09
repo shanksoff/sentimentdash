@@ -108,7 +108,7 @@ function FundCard({ data }) {
   ]
 
   return (
-    <div className="card flex flex-col gap-2 h-full overflow-hidden">
+    <div className="card flex flex-col gap-2 flex-1 overflow-hidden">
       <p className="metric-label">Fundamentals</p>
 
       {/* 52-week range */}
@@ -286,7 +286,7 @@ export default function Dashboard() {
           <div className="shrink-0">
             <PerfCard data={performance} />
           </div>
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             <FundCard data={fundamentals} />
           </div>
         </div>
