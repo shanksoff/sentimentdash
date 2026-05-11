@@ -139,6 +139,7 @@ function FundCard({ data }) {
 
 export default function Dashboard() {
   const [ticker, setTicker] = useState('')
+  const [tickers, setTickers] = useState([])
 
   const [price, setPrice] = useState([])
   const [sentiment, setSentiment] = useState([])
@@ -237,6 +238,13 @@ export default function Dashboard() {
 
   useEffect(() => stopPolling, [stopPolling])
 
+  // Fetch ticker list for mobile dropdown
+  useEffect(() => {
+    axios.get('/api/tickers')
+      .then(r => setTickers(r.data.map(t => t.symbol).sort()))
+      .catch(() => {})
+  }, [])
+
   // Auto-load default ticker on first visit
   useEffect(() => {
     fetchAll('SPY')
@@ -244,16 +252,30 @@ export default function Dashboard() {
   }, [])
 
   return (
-    <div className="relative h-screen flex flex-col overflow-hidden bg-surface text-slate-200">
+    <div className="relative min-h-screen lg:h-screen flex flex-col lg:overflow-hidden bg-surface text-slate-200">
 
       {/* ── Header ───────────────────────────────────────────── */}
       <header className="shrink-0 border-b border-border bg-card/60 backdrop-blur z-10">
-        <div className="px-4 py-3 flex items-center gap-4">
+        <div className="px-4 py-3 flex items-center gap-3 flex-wrap">
           <span className="text-emerald-400 font-bold text-sm tracking-tight whitespace-nowrap">
             📈 S&P 500 Sentiment Dashboard
           </span>
+
+          {/* Mobile ticker picker — hidden on desktop (sidebar handles it there) */}
+          {tickers.length > 0 && (
+            <select
+              className="lg:hidden ml-1 bg-card border border-border rounded px-2 py-1 text-xs text-slate-200 font-mono"
+              value={ticker}
+              onChange={e => fetchAll(e.target.value)}
+            >
+              {tickers.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          )}
+
           {ticker && (
-            <span className="text-slate-400 text-sm whitespace-nowrap">
+            <span className="hidden lg:inline text-slate-400 text-sm whitespace-nowrap">
               <span className="text-slate-100 font-mono font-semibold">{ticker}</span>
               {fundamentals?.company_name && (
                 <span className="ml-2 text-slate-500">— {fundamentals.company_name}</span>
@@ -271,33 +293,34 @@ export default function Dashboard() {
       </header>
 
       {/* ── 4-Column Body ────────────────────────────────────── */}
-      <main className="flex-1 flex gap-1.5 p-1.5 overflow-hidden min-h-0">
+      <main className="flex-1 flex flex-col lg:flex-row gap-1.5 p-1.5 overflow-auto lg:overflow-hidden lg:min-h-0">
 
-        {/* Col 1 — Ticker Sidebar */}
-        <div className="w-44 shrink-0 flex flex-col overflow-hidden">
+        {/* Col 1 — Ticker Sidebar (desktop only) */}
+        <div className="hidden lg:flex w-44 shrink-0 flex-col overflow-hidden">
           <TickerSidebar activeTicker={ticker} onSelect={fetchAll} />
         </div>
 
         {/* Col 2 — Signal / Performance / Fundamentals */}
-        <div className="w-56 shrink-0 flex flex-col gap-1.5 overflow-hidden">
-          <div className="shrink-0">
+        {/* Mobile: horizontal scroll row. Desktop: vertical stack */}
+        <div className="flex flex-row lg:flex-col gap-1.5 overflow-x-auto lg:overflow-hidden lg:w-56 lg:shrink-0 pb-1 lg:pb-0">
+          <div className="shrink-0 w-48 lg:w-auto">
             <SignalCard prediction={prediction} forecast={forecast} price={price} />
           </div>
-          <div className="shrink-0">
+          <div className="shrink-0 w-48 lg:w-auto">
             <PerfCard data={performance} />
           </div>
-          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <div className="shrink-0 w-64 lg:w-auto lg:flex-1 lg:min-h-0 lg:overflow-hidden lg:flex lg:flex-col">
             <FundCard data={fundamentals} />
           </div>
         </div>
 
         {/* Col 3 — Charts (top) + News (bottom) */}
-        <div className="flex-1 min-w-0 flex flex-col gap-1.5 overflow-hidden">
+        <div className="flex-1 min-w-0 flex flex-col gap-1.5 lg:overflow-hidden">
 
           {/* Chart pane with tabs */}
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden card p-0">
-            {/* Tab bar */}
-            <div className="flex shrink-0 border-b border-border px-2 pt-2 gap-1 flex-wrap">
+          <div className="h-[420px] lg:h-auto lg:flex-1 lg:min-h-0 flex flex-col overflow-hidden card p-0">
+            {/* Tab bar — scrollable on mobile */}
+            <div className="flex shrink-0 border-b border-border px-2 pt-2 gap-1 overflow-x-auto">
               {[
                 { key: 'main',       label: 'Main' },
                 { key: 'forecast',   label: 'Forecast' },
@@ -310,7 +333,7 @@ export default function Dashboard() {
                 <button
                   key={key}
                   onClick={() => setChartTab(key)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors border-b-2 -mb-px ${
+                  className={`shrink-0 px-3 py-1.5 text-xs font-medium rounded-t transition-colors border-b-2 -mb-px ${
                     chartTab === key
                       ? 'text-emerald-400 border-emerald-500 bg-emerald-500/5'
                       : 'text-slate-500 border-transparent hover:text-slate-300'
@@ -364,7 +387,7 @@ export default function Dashboard() {
         </div>
 
         {/* Col 4 — AI Analysis */}
-        <div className="w-64 shrink-0 overflow-auto">
+        <div className="lg:w-64 lg:shrink-0 overflow-auto">
           <AnalysisPanel data={analysis} loading={analysisLoading} ticker={ticker} />
         </div>
 
