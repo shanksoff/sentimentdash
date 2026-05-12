@@ -14,6 +14,8 @@ GET /api/regression/{ticker}             Sentiment → return regression stats
 GET /api/prediction/{ticker}             Random Forest Watch/Hold/Avoid signal
 GET /api/prediction-accuracy/{ticker}    Historical signal accuracy stats
 GET /api/analysis/{ticker}               Gemini AI analyst briefing (1-hr cache)
+GET /api/decomposition/{ticker}          STL price decomposition (trend/seasonal/residual)
+GET /api/rolling-correlation/{ticker}    Rolling sentiment vs return correlation (14d/30d)
 
 Sentiment data is populated by scheduler.py (runs daily).
 When a ticker has no scored articles yet, get_sentiment fires a one-time
@@ -36,7 +38,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from analysis_engine import generate_analysis, stream_chat_response
-from analytics import arima_forecast, binary_prediction, sentiment_return_regression
+from analytics import (
+    arima_forecast,
+    binary_prediction,
+    price_decomposition,
+    rolling_correlation,
+    sentiment_return_regression,
+)
 from database import close_pool, get_conn, init_pool
 from fetch_market_data import upsert_price_history, upsert_ticker
 from fetch_news import fetch_for_ticker
@@ -473,6 +481,47 @@ def get_prediction_accuracy(ticker: str) -> dict:
             for r in rows[:10]
         ],
     }
+
+
+@app.get("/api/decomposition/{ticker}")
+def get_decomposition(ticker: str) -> dict:
+    """STL decomposition of close price into trend, seasonal, and residual components."""
+    symbol = ticker.upper()
+    with get_conn() as conn:
+        price_rows = _fetch_price_rows(conn, symbol)
+
+    if len(price_rows) < 20:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Need at least 20 price observations for '{symbol}'.",
+        )
+
+    try:
+        return price_decomposition(price_rows)
+    except Exception as exc:
+        log.error("Decomposition failed for %s: %s", symbol, exc)
+        raise HTTPException(status_code=500, detail="Decomposition computation failed.")
+
+
+@app.get("/api/rolling-correlation/{ticker}")
+def get_rolling_correlation(ticker: str) -> dict:
+    """Rolling Pearson correlation between daily sentiment and same-day price return."""
+    symbol = ticker.upper()
+    with get_conn() as conn:
+        price_rows = _fetch_price_rows(conn, symbol)
+        sent_rows  = _fetch_sentiment_rows(conn, symbol)
+
+    if len(price_rows) < 15:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Need at least 15 price observations for '{symbol}'.",
+        )
+
+    try:
+        return rolling_correlation(price_rows, sent_rows)
+    except Exception as exc:
+        log.error("Rolling correlation failed for %s: %s", symbol, exc)
+        raise HTTPException(status_code=500, detail="Rolling correlation computation failed.")
 
 
 @app.get("/api/analysis/{ticker}")

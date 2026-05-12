@@ -7,6 +7,8 @@ Functions
 sentiment_return_regression  Regress daily sentiment vs next-day log return
 arima_forecast               Auto-ARIMA 7-day price forecast with 95 % CI
 binary_prediction            Random Forest 5-day up/down classifier → Watch/Hold/Avoid
+price_decomposition          STL decomposition → trend / seasonal / residual components
+rolling_correlation          Rolling Pearson correlation: sentiment vs same-day return
 """
 
 import warnings
@@ -428,3 +430,98 @@ def _pct_b(closes, period=20):
         else:
             result[i] = (closes[i] - (mean - 2 * std)) / (4 * std)
     return result
+
+
+# ── STL Decomposition ─────────────────────────────────────────────────────────
+
+
+def price_decomposition(price_rows: list[dict]) -> dict:
+    """
+    Applies STL (Seasonal-Trend decomposition using LOESS) to the close price
+    series and returns the observed, trend, seasonal, and residual components.
+
+    Uses period=5 (weekly trading cycle). Requires at least 20 data points.
+
+    Returns
+    -------
+    dict with keys: dates, observed, trend, seasonal, residual
+    """
+    from statsmodels.tsa.seasonal import STL  # lazy import — heavy
+
+    prices = sorted(price_rows, key=lambda r: str(r["date"]))
+    if len(prices) < 20:
+        return {"error": "insufficient_data", "n": len(prices)}
+
+    dates  = [str(r["date"])[:10] for r in prices]
+    closes = np.array([float(r["close"]) for r in prices], dtype=float)
+
+    stl    = STL(closes, period=5, robust=True)
+    result = stl.fit()
+
+    return {
+        "dates":    dates,
+        "observed": [round(float(v), 2) for v in result.observed],
+        "trend":    [round(float(v), 2) for v in result.trend],
+        "seasonal": [round(float(v), 4) for v in result.seasonal],
+        "residual": [round(float(v), 4) for v in result.resid],
+    }
+
+
+# ── Rolling Correlation ───────────────────────────────────────────────────────
+
+
+def rolling_correlation(
+    price_rows:     list[dict],
+    sentiment_rows: list[dict],
+    windows:        tuple[int, ...] = (14, 30),
+) -> dict:
+    """
+    Computes rolling Pearson correlation between daily sentiment scores and
+    same-day price returns over multiple window lengths.
+
+    Returns
+    -------
+    dict with key "points" — list of { date, corr_14d, corr_30d }
+    None values indicate not enough data in that window yet.
+    """
+    prices = sorted(price_rows, key=lambda r: str(r["date"]))
+    if len(prices) < 2:
+        return {"points": []}
+
+    dates  = [str(r["date"])[:10] for r in prices]
+    closes = np.array([float(r["close"]) for r in prices], dtype=float)
+
+    # Daily % returns (first element is NaN — no prior day)
+    returns = np.full(len(closes), np.nan)
+    returns[1:] = (closes[1:] - closes[:-1]) / closes[:-1] * 100
+
+    sent_map = _daily_avg_sentiment(sentiment_rows)
+
+    # Compute rolling correlation for each window
+    corr_series: dict[int, list] = {w: [None] * len(dates) for w in windows}
+
+    for w in windows:
+        for i in range(w - 1, len(dates)):
+            w_dates   = dates[i - w + 1 : i + 1]
+            w_returns = returns[i - w + 1 : i + 1]
+            w_sent    = np.array([sent_map.get(d, np.nan) for d in w_dates])
+
+            # Keep only days that have both return and sentiment
+            mask = ~np.isnan(w_returns) & ~np.isnan(w_sent)
+            r_clean = w_returns[mask]
+            s_clean = w_sent[mask]
+
+            if len(r_clean) < 5:
+                continue
+
+            corr = float(np.corrcoef(s_clean, r_clean)[0, 1])
+            corr_series[w][i] = round(corr, 4) if not np.isnan(corr) else None
+
+    # Zip into point list (only emit rows where at least one window has data)
+    points = []
+    for i, d in enumerate(dates):
+        row = {f"corr_{w}d": corr_series[w][i] for w in windows}
+        if any(v is not None for v in row.values()):
+            points.append({"date": d, **row})
+
+    return {"points": points}

@@ -63,6 +63,37 @@ Colour bands:
 Higher volatility makes the ARIMA forecast less reliable and widens ML confidence bounds. It does not indicate direction — a stock can be highly volatile in either direction.`,
   },
   {
+    title: 'STL Price Decomposition',
+    icon: '📉',
+    body: `STL (Seasonal-Trend decomposition using LOESS) breaks a price series into three additive components:
+
+  · Trend — the underlying direction of the stock, smoothed using locally weighted regression (LOESS). This removes short-term noise and weekly cycles to reveal the true momentum.
+  · Seasonal — the repeating weekly pattern in price behaviour (e.g. Monday weakness, Friday strength). A period of 5 trading days is used. For most large-caps this component is small but non-zero.
+  · Residual — what is left after removing trend and seasonal. Large residual spikes correspond to unexpected events: earnings surprises, macro shocks, or news-driven gaps.
+
+Robust fitting is enabled, which reduces the influence of outliers on the trend estimate. The decomposition requires at least 20 days of price data.
+
+A widening residual over time suggests increasing unpredictability. A flattening trend while sentiment remains high or low can signal a potential reversal.`,
+  },
+  {
+    title: 'Rolling Correlation — Sentiment vs Return',
+    icon: '🔗',
+    body: `Measures the Pearson correlation coefficient between the daily average sentiment score and the same-day price return, calculated over a rolling window.
+
+Two windows are shown:
+  · 14-day — reacts quickly to recent changes in the sentiment-price relationship
+  · 30-day — smoother, reflects the medium-term structural relationship
+
+Interpreting the value:
+  · |r| < 0.2  →  noise zone — correlation is not meaningful
+  · 0.2–0.5    →  weak to moderate relationship
+  · > 0.5      →  strong relationship (uncommon for daily data)
+
+A positive correlation means bullish news days tend to coincide with price gains. Negative correlation means the market is moving against the news — often a contrarian signal.
+
+The grey shaded band marks the ±0.2 noise zone. Correlation crossing into or out of this band is worth noting. A correlation that was strong and suddenly collapses to zero suggests the sentiment signal has decoupled from price action.`,
+  },
+  {
     title: 'Data & Limitations',
     icon: '⚠',
     body: `All data is sourced from public RSS feeds and free-tier financial APIs. Sentiment coverage density varies by ticker — large-caps (SPY, NVDA, AAPL) have more articles per day than smaller names, which produces more reliable daily averages.

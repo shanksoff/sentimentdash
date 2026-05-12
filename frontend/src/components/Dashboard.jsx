@@ -11,6 +11,8 @@ import AnalysisPanel from './AnalysisPanel'
 import SentimentPriceChart from './SentimentPriceChart'
 import PredictionPanel from './PredictionPanel'
 import MethodologyPanel from './MethodologyPanel'
+import DecompositionPanel from './DecompositionPanel'
+import RollingCorrelationPanel from './RollingCorrelationPanel'
 import InfoTooltip from './InfoTooltip'
 
 // ─── Col 2 compact components ────────────────────────────────
@@ -160,6 +162,8 @@ export default function Dashboard() {
   const [forecast, setForecast] = useState(null)
   const [regression, setRegression] = useState(null)
   const [prediction, setPrediction] = useState(null)
+  const [decomposition, setDecomposition] = useState(null)
+  const [rollingCorr, setRollingCorr] = useState(null)
   const [analysis, setAnalysis] = useState(null)
   const [analysisLoading, setAnalysisLoading] = useState(false)
   const [selectedSentimentDate, setSelectedSentimentDate] = useState(null)
@@ -169,6 +173,7 @@ export default function Dashboard() {
   const [bootstrapping, setBootstrapping] = useState(false)
   const [chartTab, setChartTab] = useState('main')
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false)
+  const [methodologyOpen, setMethodologyOpen] = useState(false)
   const [fundOpen, setFundOpen] = useState(false)
 
   const pollRef = useRef(null)
@@ -191,10 +196,12 @@ export default function Dashboard() {
     setForecast(null)
     setRegression(null)
     setPrediction(null)
+    setDecomposition(null)
+    setRollingCorr(null)
     setAnalysis(null)
 
     try {
-      const [priceRes, sentRes, fundRes, incRes, perfRes, forecastRes, regressionRes, predictionRes] = await Promise.allSettled([
+      const [priceRes, sentRes, fundRes, incRes, perfRes, forecastRes, regressionRes, predictionRes, decompRes, rollingCorrRes] = await Promise.allSettled([
         axios.get(`/api/price/${sym}`),
         axios.get(`/api/sentiment/${sym}`),
         axios.get(`/api/fundamentals/${sym}`),
@@ -203,6 +210,8 @@ export default function Dashboard() {
         axios.get(`/api/forecast/${sym}`),
         axios.get(`/api/regression/${sym}`),
         axios.get(`/api/prediction/${sym}`),
+        axios.get(`/api/decomposition/${sym}`),
+        axios.get(`/api/rolling-correlation/${sym}`),
       ])
 
       setPrice(priceRes.status === 'fulfilled' ? priceRes.value.data : [])
@@ -214,6 +223,8 @@ export default function Dashboard() {
       setForecast(forecastRes.status === 'fulfilled' ? forecastRes.value.data : null)
       setRegression(regressionRes.status === 'fulfilled' ? regressionRes.value.data : null)
       setPrediction(predictionRes.status === 'fulfilled' ? predictionRes.value.data : null)
+      setDecomposition(decompRes.status === 'fulfilled' ? decompRes.value.data : null)
+      setRollingCorr(rollingCorrRes.status === 'fulfilled' ? rollingCorrRes.value.data : null)
 
       // AI analysis fires after main data — Gemini takes a few seconds
       setAnalysisLoading(true)
@@ -273,6 +284,13 @@ export default function Dashboard() {
           <span className="font-bold text-sm tracking-tight whitespace-nowrap" style={{ color: '#00E5B3' }}>
             📈 S&P 500 Sentiment Dashboard
           </span>
+
+          <button
+            onClick={() => setMethodologyOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-medium border border-[#1E2C3E] text-slate-400 hover:text-[#00E5B3] hover:border-[#00E5B3]/40 transition-colors shrink-0"
+          >
+            🔬 How it works
+          </button>
 
           {/* Mobile ticker picker — hidden on desktop (sidebar handles it there) */}
           {tickers.length > 0 && (
@@ -349,8 +367,9 @@ export default function Dashboard() {
                 { key: 'sentiment',   label: 'Sent. vs Price' },
                 { key: 'regression',  label: 'Regression' },
                 { key: 'volatility',  label: 'Volatility' },
-                { key: 'income',      label: 'Income Statement' },
-                { key: 'methodology', label: '🔬 How It Works' },
+                { key: 'income',       label: 'Income Statement' },
+                { key: 'decomp',       label: 'Decomposition' },
+                { key: 'rolling-corr', label: 'Rolling Corr.' },
               ].map(({ key, label }) => (
                 <button
                   key={key}
@@ -396,8 +415,11 @@ export default function Dashboard() {
               {chartTab === 'income' && (
                 <IncomeTable data={incomeStatement} />
               )}
-              {chartTab === 'methodology' && (
-                <MethodologyPanel />
+              {chartTab === 'decomp' && (
+                <DecompositionPanel data={decomposition} ticker={ticker} />
+              )}
+              {chartTab === 'rolling-corr' && (
+                <RollingCorrelationPanel data={rollingCorr} ticker={ticker} />
               )}
             </div>
           </div>
@@ -454,6 +476,39 @@ export default function Dashboard() {
             </div>
             <div className="overflow-auto flex-1 px-3 pb-6">
               <AnalysisPanel data={analysis} loading={analysisLoading} ticker={ticker} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Methodology Drawer ───────────────────────────────── */}
+      {methodologyOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setMethodologyOpen(false)}
+          />
+          {/* Panel */}
+          <div className="relative w-full max-w-lg h-full flex flex-col shadow-2xl"
+            style={{ background: '#0C1018', borderLeft: '1px solid #1E2C3E' }}
+          >
+            {/* Header */}
+            <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-[#1E2C3E]">
+              <div className="flex items-center gap-2">
+                <span>🔬</span>
+                <h2 className="text-sm font-semibold text-slate-200">How It Works</h2>
+              </div>
+              <button
+                onClick={() => setMethodologyOpen(false)}
+                className="text-slate-500 hover:text-slate-300 transition-colors text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <MethodologyPanel />
             </div>
           </div>
         </div>

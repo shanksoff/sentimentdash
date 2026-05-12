@@ -30,3 +30,4 @@ numpy>=1.26.0
 scipy>=1.13.0
 pmdarima>=2.0.4        # auto_arima for ARIMA order selection
 scikit-learn>=1.4.0    # Random Forest classifier (Phase 3)
+statsmodels>=0.14.0    # STL decomposition, time-series utilities
