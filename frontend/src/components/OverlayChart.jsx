@@ -140,7 +140,8 @@ export default function OverlayChart({
   priceData, sentimentData, ticker, selectedDate, onSentimentClick,
 }) {
   // All indicators on by default — user can toggle off
-  const [ind, setInd] = useState({ bb: true, rsi: true, macd: true })
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024
+  const [ind, setInd] = useState({ bb: true, rsi: !isMobile, macd: !isMobile })
   const toggle = key => setInd(prev => ({ ...prev, [key]: !prev[key] }))
 
   const base = mergeData(priceData, sentimentData)
@@ -283,9 +284,9 @@ export default function OverlayChart({
             stroke="#f59e0b"
             strokeWidth={2}
             connectNulls={false}
-            dot={props => (
+            dot={({ key, ...props }) => (
               <SentimentDot
-                key={props.index}
+                key={key}
                 {...props}
                 selectedDate={selectedDate}
                 onSentimentClick={onSentimentClick}

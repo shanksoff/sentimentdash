@@ -36,7 +36,7 @@ export default function IncomeTable({ data }) {
       <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-4">
         Income Statement — 5-Year Annual
       </h2>
-      <table className="w-full text-sm border-collapse">
+      <table className="min-w-max w-full text-sm border-collapse">
         <thead>
           <tr className="border-b border-border">
             <th className="text-left py-2 pr-6 text-slate-500 font-medium w-44">Metric</th>

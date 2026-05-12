@@ -4,15 +4,16 @@ FastAPI backend for the Stock Sentiment & Analytics Dashboard.
 
 Endpoints
 ---------
-GET /api/price/{ticker}            3-month OHLCV daily data
-GET /api/sentiment/{ticker}        Last 30 days of scored articles
-GET /api/fundamentals/{ticker}     All key metrics + dividend data
-GET /api/income-statement/{ticker} 5-year income statement table
-GET /api/performance/{ticker}      Relative perf (1M / 3M / 6M / 12M)
-GET /api/forecast/{ticker}         Auto-ARIMA 7-day price forecast
-GET /api/regression/{ticker}       Sentiment → return regression stats
-GET /api/prediction/{ticker}       Random Forest Watch/Hold/Avoid signal
-GET /api/analysis/{ticker}         Gemini AI analyst briefing (1-hr cache)
+GET /api/price/{ticker}                  3-month OHLCV daily data
+GET /api/sentiment/{ticker}              Last 30 days of scored articles
+GET /api/fundamentals/{ticker}           All key metrics + dividend data
+GET /api/income-statement/{ticker}       5-year income statement table
+GET /api/performance/{ticker}            Relative perf (1M / 3M / 6M / 12M)
+GET /api/forecast/{ticker}               Auto-ARIMA 7-day price forecast
+GET /api/regression/{ticker}             Sentiment → return regression stats
+GET /api/prediction/{ticker}             Random Forest Watch/Hold/Avoid signal
+GET /api/prediction-accuracy/{ticker}    Historical signal accuracy stats
+GET /api/analysis/{ticker}               Gemini AI analyst briefing (1-hr cache)
 
 Sentiment data is populated by scheduler.py (runs daily).
 When a ticker has no scored articles yet, get_sentiment fires a one-time
@@ -103,6 +104,45 @@ app.add_middleware(
 
 def _dec_to_float(v):
     return float(v) if isinstance(v, Decimal) else v
+
+
+def _add_trading_days(start: date, n: int) -> date:
+    """Return the date that is `n` trading days (Mon-Fri) after `start`."""
+    d = start
+    added = 0
+    while added < n:
+        d += timedelta(days=1)
+        if d.weekday() < 5:
+            added += 1
+    return d
+
+
+def _log_prediction(symbol: str, result: dict) -> None:
+    """Insert today's prediction into prediction_log (once per ticker per day)."""
+    if result.get("error"):
+        return
+    signal = result.get("signal")
+    prob_up = result.get("prob_up")
+    horizon = result.get("horizon_days", 5)
+    if not signal or prob_up is None:
+        return
+    today = date.today()
+    outcome_date = _add_trading_days(today, horizon)
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO prediction_log
+                        (ticker, signal_date, signal, prob_up, horizon_days, outcome_date)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (ticker, signal_date) DO NOTHING
+                    """,
+                    (symbol, today, signal, prob_up, horizon, outcome_date),
+                )
+            conn.commit()
+    except Exception as exc:
+        log.warning("prediction log insert failed for %s: %s", symbol, exc)
 
 
 def _sanitise_row(row: dict) -> dict:
@@ -372,10 +412,67 @@ def get_prediction(ticker: str) -> dict:
         )
 
     try:
-        return binary_prediction(price_rows, sent_rows)
+        result = binary_prediction(price_rows, sent_rows)
+        threading.Thread(target=_log_prediction, args=(symbol, result), daemon=True).start()
+        return result
     except Exception as exc:
         log.error("Prediction failed for %s: %s", symbol, exc)
         raise HTTPException(status_code=500, detail="Prediction computation failed.")
+
+
+@app.get("/api/prediction-accuracy/{ticker}")
+def get_prediction_accuracy(ticker: str) -> dict:
+    """Historical accuracy of Watch/Avoid signals for a ticker (Hold excluded)."""
+    symbol = ticker.upper()
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT signal, correct, signal_date, prob_up
+                FROM prediction_log
+                WHERE ticker = %s
+                  AND signal != 'Hold'
+                  AND correct IS NOT NULL
+                ORDER BY signal_date DESC
+                LIMIT 60
+                """,
+                (symbol,),
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+
+    if not rows:
+        return {"total": 0, "correct": 0, "accuracy": None,
+                "watch_accuracy": None, "avoid_accuracy": None, "recent": []}
+
+    total = len(rows)
+    correct_count = sum(1 for r in rows if r["correct"])
+    accuracy = round(correct_count / total, 4) if total else None
+
+    watch_rows = [r for r in rows if r["signal"] == "Watch"]
+    avoid_rows = [r for r in rows if r["signal"] == "Avoid"]
+
+    return {
+        "total": total,
+        "correct": correct_count,
+        "accuracy": accuracy,
+        "watch_accuracy": (
+            round(sum(1 for r in watch_rows if r["correct"]) / len(watch_rows), 4)
+            if watch_rows else None
+        ),
+        "avoid_accuracy": (
+            round(sum(1 for r in avoid_rows if r["correct"]) / len(avoid_rows), 4)
+            if avoid_rows else None
+        ),
+        "recent": [
+            {
+                "date": str(r["signal_date"]),
+                "signal": r["signal"],
+                "correct": bool(r["correct"]),
+                "prob_up": float(r["prob_up"]),
+            }
+            for r in rows[:10]
+        ],
+    }
 
 
 @app.get("/api/analysis/{ticker}")
