@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 // ─── Signal config ───────────────────────────────────────────
@@ -102,6 +103,16 @@ function TargetPrice({ forecastData, priceData, horizonDays, color }) {
 // ─── Main component ──────────────────────────────────────────
 
 export default function PredictionPanel({ data, ticker, forecastData, priceData }) {
+  const [accuracy, setAccuracy] = useState(null)
+
+  useEffect(() => {
+    if (!ticker) return
+    fetch(`/api/prediction-accuracy/${ticker}`)
+      .then(r => r.json())
+      .then(d => setAccuracy(d))
+      .catch(() => {})
+  }, [ticker])
+
   if (!data) return null
   if (data.error === 'insufficient_data') {
     return (
@@ -128,6 +139,22 @@ export default function PredictionPanel({ data, ticker, forecastData, priceData 
           <p className="text-xs text-slate-600 mt-0.5">
             Random Forest · {n_samples} training samples · {accuracyLabel}
           </p>
+          {/* Historical accuracy badge */}
+          {accuracy?.total > 0 && (
+            <p className="text-xs mt-1">
+              <span className="text-slate-500">Historical: </span>
+              <span
+                className="font-mono font-semibold"
+                style={{ color: accuracy.accuracy >= 0.55 ? '#10b981' : accuracy.accuracy >= 0.45 ? '#f59e0b' : '#ef4444' }}
+              >
+                {accuracy.correct}/{accuracy.total} correct ({(accuracy.accuracy * 100).toFixed(0)}%)
+              </span>
+              <span className="text-slate-600"> · last {accuracy.total} signals</span>
+            </p>
+          )}
+          {accuracy?.total === 0 && (
+            <p className="text-xs text-slate-700 mt-1">No resolved signals yet — check back in 5 trading days.</p>
+          )}
         </div>
 
         {/* Signal badge */}

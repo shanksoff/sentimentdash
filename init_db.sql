@@ -103,9 +103,34 @@ CREATE INDEX IF NOT EXISTS idx_price_history_ticker  ON price_history(ticker);
 CREATE INDEX IF NOT EXISTS idx_price_history_date    ON price_history(date DESC);
 
 -- ------------------------------------------------------------
+--  5. PREDICTION_LOG
+--     Stores daily ML signals and resolved outcomes for
+--     accuracy tracking.  One row per ticker per day.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS prediction_log (
+    id              SERIAL PRIMARY KEY,
+    ticker          VARCHAR(20)  NOT NULL,
+    signal_date     DATE         NOT NULL,
+    signal          VARCHAR(10)  NOT NULL,   -- Watch | Hold | Avoid
+    prob_up         NUMERIC(6,4) NOT NULL,
+    horizon_days    SMALLINT     NOT NULL DEFAULT 5,
+    outcome_date    DATE,                    -- signal_date + horizon trading days
+    outcome         SMALLINT,               -- 1=price up, 0=price down, NULL=pending
+    correct         BOOLEAN,                -- NULL until resolved, NULL for Hold
+    created_at      TIMESTAMPTZ  DEFAULT NOW(),
+
+    CONSTRAINT uq_prediction_log_ticker_date UNIQUE (ticker, signal_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_prediction_log_ticker      ON prediction_log(ticker);
+CREATE INDEX IF NOT EXISTS idx_prediction_log_signal_date ON prediction_log(signal_date DESC);
+CREATE INDEX IF NOT EXISTS idx_prediction_log_outcome     ON prediction_log(outcome_date)
+    WHERE outcome IS NULL;
+
+-- ------------------------------------------------------------
 --  Confirmation
 -- ------------------------------------------------------------
 DO $$
 BEGIN
-    RAISE NOTICE 'Schema initialised: tickers, rss_articles, sentiment_results, price_history';
+    RAISE NOTICE 'Schema initialised: tickers, rss_articles, sentiment_results, price_history, prediction_log';
 END $$;
