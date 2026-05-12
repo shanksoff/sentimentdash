@@ -11,7 +11,7 @@ function ForecastTooltip({ active, payload, label }) {
     <div className="card text-xs space-y-1 shadow-xl">
       <p className="text-slate-400 font-medium">{label}</p>
       {map.close?.value != null && (
-        <p className="text-emerald-400">Price: ${map.close.value.toFixed(2)}</p>
+        <p style={{ color: '#00E5B3' }}>Price: ${map.close.value.toFixed(2)}</p>
       )}
       {isForecast && map.yhat?.value != null && (
         <>
@@ -132,8 +132,8 @@ export default function ForecastPanel({ forecastData, priceData, ticker }) {
               <stop offset="100%" stopColor="#a78bfa" stopOpacity={0.06} />
             </linearGradient>
             <linearGradient id="histGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="#10b981" stopOpacity={0.15} />
-              <stop offset="95%" stopColor="#10b981" stopOpacity={0}    />
+              <stop offset="5%"  stopColor="#00E5B3" stopOpacity={0.15} />
+              <stop offset="95%" stopColor="#00E5B3" stopOpacity={0}    />
             </linearGradient>
           </defs>
 
@@ -141,7 +141,7 @@ export default function ForecastPanel({ forecastData, priceData, ticker }) {
           <Area
             type="monotone"
             dataKey="close"
-            stroke="#10b981"
+            stroke="#00E5B3"
             strokeWidth={2}
             fill="url(#histGrad)"
             dot={false}
@@ -186,7 +186,7 @@ export default function ForecastPanel({ forecastData, priceData, ticker }) {
       </div>
 
       <div className="flex gap-4 mt-2 text-[10px] text-slate-600 shrink-0">
-        <span className="text-emerald-400/70">— Actual price</span>
+        <span style={{ color: '#00E5B380' }}>— Actual price</span>
         <span className="text-violet-400/70">— Forecast</span>
         <span style={{ color: '#a78bfa44' }}>▮ 95% CI</span>
       </div>

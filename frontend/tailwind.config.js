@@ -4,9 +4,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        surface: '#0f1117',
-        card:    '#181c27',
-        border:  '#2a2f3d',
+        surface: '#0C1018',
+        card:    '#141B28',
+        border:  '#1E2C3E',
+        mint:    '#00E5B3',
       },
       fontFamily: {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],

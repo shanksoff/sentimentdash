@@ -10,6 +10,8 @@ import RegressionPanel from './RegressionPanel'
 import AnalysisPanel from './AnalysisPanel'
 import SentimentPriceChart from './SentimentPriceChart'
 import PredictionPanel from './PredictionPanel'
+import MethodologyPanel from './MethodologyPanel'
+import InfoTooltip from './InfoTooltip'
 
 // ─── Col 2 compact components ────────────────────────────────
 
@@ -39,7 +41,10 @@ function SignalCard({ prediction, forecast, price }) {
 
   return (
     <div className="card" style={{ borderColor: cfg.color + '50' }}>
-      <p className="metric-label mb-2">ML Signal · {prediction.horizon_days ?? 5}-Day</p>
+      <div className="flex items-center mb-2">
+        <p className="metric-label">ML Signal · {prediction.horizon_days ?? 5}-Day</p>
+        <InfoTooltip text="A Random Forest classifier predicts whether the stock will close higher or lower in 5 trading days. Features include RSI, Bollinger Band position, price momentum, and rolling sentiment scores. Watch = P(up) ≥ 60%, Hold = 40–60%, Avoid = < 40%. See the Methodology tab for full details." />
+      </div>
       <div className="flex items-baseline gap-3 mb-1">
         <span className="text-2xl font-bold font-mono" style={{ color: cfg.color }}>{cfg.label}</span>
         {prob != null && <span className="text-xs text-slate-500">P(up) <span className="font-mono font-semibold" style={{ color: cfg.color }}>{prob}%</span></span>}
@@ -63,7 +68,10 @@ function PerfCard({ data }) {
   ]
   return (
     <div className="card">
-      <p className="metric-label mb-2">Relative Performance</p>
+      <div className="flex items-center mb-2">
+        <p className="metric-label">Relative Performance</p>
+        <InfoTooltip text="Total price return over the trailing 1, 3, 6, and 12 months from daily closing prices. Raw price return only — dividends not included. Use this to gauge whether recent sentiment and ML signals are aligned with or diverging from longer-term price trends." />
+      </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
         {rows.map(({ label, val }) => {
           const pct = val != null ? (val * 100).toFixed(2) : null
@@ -109,7 +117,10 @@ function FundCard({ data }) {
 
   return (
     <div className="card flex flex-col gap-2 flex-1 overflow-hidden">
-      <p className="metric-label">Fundamentals</p>
+      <div className="flex items-center">
+        <p className="metric-label">Fundamentals</p>
+        <InfoTooltip text="Key fundamental ratios sourced from Yahoo Finance. P/E = price-to-earnings, P/B = price-to-book, P/S = price-to-sales, EPS = earnings per share, ROE = return on equity, D/E = debt-to-equity ratio. The 52W range bar shows where the midpoint of the 52-week high/low sits." />
+      </div>
 
       {/* 52-week range */}
       <div>
@@ -259,7 +270,7 @@ export default function Dashboard() {
       {/* ── Header ───────────────────────────────────────────── */}
       <header className="shrink-0 border-b border-border bg-card/60 backdrop-blur z-10">
         <div className="px-4 py-3 flex items-center gap-3 flex-wrap">
-          <span className="text-emerald-400 font-bold text-sm tracking-tight whitespace-nowrap">
+          <span className="font-bold text-sm tracking-tight whitespace-nowrap" style={{ color: '#00E5B3' }}>
             📈 S&P 500 Sentiment Dashboard
           </span>
 
@@ -285,12 +296,13 @@ export default function Dashboard() {
             </span>
           )}
           {bootstrapping && (
-            <div className="ml-auto flex items-center gap-2 text-amber-400 text-xs">
+            <div className="flex items-center gap-2 text-amber-400 text-xs">
               <div className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0" />
               Fetching sentiment…
             </div>
           )}
-          {error && <span className="ml-auto text-red-400 text-xs">{error}</span>}
+          {error && <span className="text-red-400 text-xs">{error}</span>}
+
         </div>
       </header>
 
@@ -331,22 +343,24 @@ export default function Dashboard() {
             {/* Tab bar — scrollable on mobile */}
             <div className="flex shrink-0 border-b border-border px-2 pt-2 gap-1 overflow-x-auto">
               {[
-                { key: 'main',       label: 'Main' },
-                { key: 'forecast',   label: 'Forecast' },
-                { key: 'prediction', label: '5dF' },
-                { key: 'sentiment',  label: 'Sent. vs Price' },
-                { key: 'regression', label: 'Regression' },
-                { key: 'volatility', label: 'Volatility' },
-                { key: 'income',     label: 'Income Statement' },
+                { key: 'main',        label: 'Main' },
+                { key: 'forecast',    label: 'Forecast' },
+                { key: 'prediction',  label: '5dF' },
+                { key: 'sentiment',   label: 'Sent. vs Price' },
+                { key: 'regression',  label: 'Regression' },
+                { key: 'volatility',  label: 'Volatility' },
+                { key: 'income',      label: 'Income Statement' },
+                { key: 'methodology', label: '🔬 How It Works' },
               ].map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => setChartTab(key)}
                   className={`shrink-0 px-3 py-1.5 text-xs font-medium rounded-t transition-colors border-b-2 -mb-px ${
                     chartTab === key
-                      ? 'text-emerald-400 border-emerald-500 bg-emerald-500/5'
-                      : 'text-slate-500 border-transparent hover:text-slate-300'
+                      ? 'border-[#00E5B3]'
+                      : 'border-transparent hover:text-slate-300'
                   }`}
+                  style={chartTab === key ? { color: '#00E5B3' } : {}}
                 >
                   {label}
                 </button>
@@ -382,6 +396,9 @@ export default function Dashboard() {
               {chartTab === 'income' && (
                 <IncomeTable data={incomeStatement} />
               )}
+              {chartTab === 'methodology' && (
+                <MethodologyPanel />
+              )}
             </div>
           </div>
 
@@ -404,8 +421,8 @@ export default function Dashboard() {
 
       {/* ── AI FAB (mobile only) ─────────────────────────────── */}
       <button
-        className="lg:hidden fixed bottom-5 right-5 z-30 w-13 h-13 rounded-full bg-emerald-600 hover:bg-emerald-500 shadow-xl flex items-center justify-center text-xl transition-colors"
-        style={{ width: 52, height: 52 }}
+        className="lg:hidden fixed bottom-5 right-5 z-30 rounded-full shadow-xl flex items-center justify-center text-xl transition-colors"
+        style={{ background: '#00E5B3', width: 52, height: 52 }}
         onClick={() => setAiDrawerOpen(true)}
         aria-label="Open AI analysis"
       >
@@ -445,7 +462,7 @@ export default function Dashboard() {
       {/* Loading overlay */}
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-surface/80 z-20">
-          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#00E5B3', borderTopColor: 'transparent' }} />
         </div>
       )}
 

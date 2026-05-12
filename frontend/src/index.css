@@ -2,41 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Base ─────────────────────────────────────────────────── */
 @layer base {
   html {
-    background-color: #0f1117;
-    color: #e2e8f0;
-    font-family: 'Inter', system-ui, sans-serif;
+    background-color: #0C1018;
+    color: #D4DCE8;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
     -webkit-font-smoothing: antialiased;
   }
 
-  * {
-    box-sizing: border-box;
-  }
+  * { box-sizing: border-box; }
 
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track { background: #0f1117; }
-  ::-webkit-scrollbar-thumb { background: #2a2f3d; border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: #3d4457; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #0C1018; }
+  ::-webkit-scrollbar-thumb { background: #1E2C3E; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #00E5B3; opacity: 0.6; }
 }
 
+/* ── Components ───────────────────────────────────────────── */
 @layer components {
   .card {
-    @apply bg-card border border-border rounded-xl p-4;
+    background: #141B28;
+    border: 1px solid #1E2C3E;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+    @apply rounded-2xl p-4;
   }
 
   .metric-label {
-    @apply text-xs text-slate-500 uppercase tracking-widest font-medium;
+    @apply text-xs uppercase tracking-widest font-semibold;
+    color: #00E5B3;
+    opacity: 0.75;
   }
 
   .metric-value {
-    @apply text-lg font-semibold text-slate-100 font-mono;
+    @apply text-lg font-semibold font-mono;
   }
 
-  .pos { @apply text-emerald-400; }
-  .neg { @apply text-red-400; }
-  .neutral { @apply text-slate-400; }
+  /* Semantic signal colours */
+  .pos     { color: #10b981; }
+  .neg     { color: #ef4444; }
+  .neutral { color: #94a3b8; }
 }

@@ -57,7 +57,7 @@ function ChartTooltip({ active, payload, label }) {
   return (
     <div className="card text-xs space-y-1 shadow-xl">
       <p className="text-slate-400">{label}</p>
-      {price && <p style={{ color: '#10b981' }}>Price: ${Number(price.value).toFixed(2)}</p>}
+      {price && <p style={{ color: '#00E5B3' }}>Price: ${Number(price.value).toFixed(2)}</p>}
       {sent  && <p style={{ color: '#f59e0b' }}>Sentiment (7d avg): {Number(sent.value).toFixed(1)}/10</p>}
     </div>
   )
@@ -145,7 +145,7 @@ export default function SentimentPriceChart({ priceData, sentimentData, ticker }
             yAxisId="price"
             type="monotone"
             dataKey="close"
-            stroke="#10b981"
+            stroke="#00E5B3"
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 3 }}

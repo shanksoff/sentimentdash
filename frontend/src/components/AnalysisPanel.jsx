@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import InfoTooltip from './InfoTooltip'
 
 // ─── Tone / confidence config ─────────────────────────────────
 
@@ -116,7 +117,7 @@ export default function AnalysisPanel({ data, loading, ticker }) {
   if (loading && !data) {
     return (
       <div className="card flex items-center gap-3 text-slate-500 text-sm">
-        <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin shrink-0" />
+        <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin shrink-0" style={{ borderColor: '#00E5B3', borderTopColor: 'transparent' }} />
         Generating AI analysis…
       </div>
     )
@@ -139,6 +140,7 @@ export default function AnalysisPanel({ data, loading, ticker }) {
         <div className="flex items-center gap-2">
           <span className="text-base">✨</span>
           <h2 className="text-sm font-semibold text-slate-300">AI Analyst Briefing</h2>
+          <InfoTooltip text="Gemini AI synthesises the last 30 days of sentiment data, price action, ARIMA forecast, and ML signal into a short briefing. Tone (Bullish/Neutral/Bearish) and confidence (High/Medium/Low) are inferred from the data. This is AI-generated analysis — not financial advice." />
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs font-mono" style={{ color: confColor }}>{data.confidence}</span>
@@ -155,9 +157,12 @@ export default function AnalysisPanel({ data, loading, ticker }) {
       <p className="text-xs text-slate-300 leading-relaxed">{data.briefing}</p>
 
       {data.key_risk && (
-        <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-950/20 border border-amber-800/40">
-          <span className="text-amber-400 text-xs mt-0.5 shrink-0">⚠</span>
-          <p className="text-xs text-amber-300/80 leading-relaxed">{data.key_risk}</p>
+        <div
+          className="flex items-start gap-2 px-3 py-2 rounded-lg border"
+          style={{ background: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.35)' }}
+        >
+          <span className="text-amber-500 text-xs mt-0.5 shrink-0">⚠</span>
+          <p className="text-xs leading-relaxed text-slate-500">{data.key_risk}</p>
         </div>
       )}
 

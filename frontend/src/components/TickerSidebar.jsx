@@ -26,9 +26,10 @@ export default function TickerSidebar({ activeTicker, onSelect }) {
               onClick={() => onSelect(t.symbol)}
               className={`w-full text-left px-3 py-2 flex items-center justify-between gap-2 transition-colors border-l-2 ${
                 isActive
-                  ? 'bg-card border-emerald-500 text-slate-100'
+                  ? 'border-[#00E5B3]'
                   : 'border-transparent hover:bg-white/[0.04] text-slate-400 hover:text-slate-200'
               }`}
+              style={isActive ? { background: '#141B28', color: '#00E5B3' } : {}}
             >
               <span className="font-mono text-xs font-semibold truncate">{t.symbol}</span>
               <div className="text-right shrink-0">

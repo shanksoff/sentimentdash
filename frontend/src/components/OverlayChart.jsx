@@ -62,7 +62,7 @@ function PriceTooltip({ active, payload, label }) {
   return (
     <div className="card text-xs space-y-1 shadow-xl">
       <p className="text-slate-400 font-medium">{label}</p>
-      {map.close     && <p className="text-emerald-400">Price: ${map.close.value?.toFixed(2)}</p>}
+      {map.close     && <p style={{ color: '#00E5B3' }}>Price: ${map.close.value?.toFixed(2)}</p>}
       {map.sentiment && <p className="text-amber-400">Sentiment: {map.sentiment.value?.toFixed(1)}/10</p>}
       {map.bbUpper   && <p className="text-sky-400">BB Upper: ${map.bbUpper.value?.toFixed(2)}</p>}
       {map.bbMid     && <p className="text-sky-300">BB Mid: ${map.bbMid.value?.toFixed(2)}</p>}
@@ -125,7 +125,7 @@ function IndicatorBtn({ label, active, onClick }) {
       onClick={onClick}
       className={`px-2.5 py-1 rounded text-xs font-mono font-semibold transition-colors border ${
         active
-          ? 'bg-emerald-600/20 text-emerald-400 border-emerald-600/50'
+          ? 'border-[#00E5B3]/50 text-[#00E5B3] bg-[#00E5B3]/10'
           : 'bg-transparent text-slate-500 border-border hover:text-slate-300 hover:border-slate-500'
       }`}
     >
@@ -252,8 +252,8 @@ export default function OverlayChart({
           />
           <defs>
             <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="#10b981" stopOpacity={0.2} />
-              <stop offset="95%" stopColor="#10b981" stopOpacity={0}   />
+              <stop offset="5%"  stopColor="#00E5B3" stopOpacity={0.18} />
+              <stop offset="95%" stopColor="#00E5B3" stopOpacity={0}    />
             </linearGradient>
           </defs>
 
@@ -261,11 +261,11 @@ export default function OverlayChart({
             yAxisId="price"
             type="monotone"
             dataKey="close"
-            stroke="#10b981"
+            stroke="#00E5B3"
             strokeWidth={2}
             fill="url(#priceGrad)"
             dot={false}
-            activeDot={{ r: 4, fill: '#10b981' }}
+            activeDot={{ r: 4, fill: '#00E5B3' }}
           />
 
           {ind.bb && <>
