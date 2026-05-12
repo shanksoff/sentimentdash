@@ -509,7 +509,7 @@ def get_rolling_correlation(ticker: str) -> dict:
     symbol = ticker.upper()
     with get_conn() as conn:
         price_rows = _fetch_price_rows(conn, symbol)
-        sent_rows  = _fetch_sentiment_rows(conn, symbol)
+        sent_rows = _fetch_sentiment_rows(conn, symbol)
 
     if len(price_rows) < 15:
         raise HTTPException(

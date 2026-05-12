@@ -1,6 +1,6 @@
 import {
   ComposedChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea, Legend,
+  Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from 'recharts'
 
 function CustomTooltip({ active, payload, label }) {
