@@ -23,7 +23,7 @@ background bootstrap (fetch + score) so data appears within ~60 seconds.
 import logging
 import threading
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import json
