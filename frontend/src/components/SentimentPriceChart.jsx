@@ -16,17 +16,10 @@ function rollingAvg(arr, window) {
 // ─── Build aligned dataset ───────────────────────────────────
 
 function buildChartData(priceData, sentimentData) {
-  // Daily avg sentiment
-  const sentByDate = {}
-  for (const row of sentimentData) {
-    const d = String(row.published_at ?? row.created_at ?? '').slice(0, 10)
-    if (!d) continue
-    if (!sentByDate[d]) sentByDate[d] = []
-    sentByDate[d].push(Number(row.score))
-  }
+  // sentimentData is pre-aggregated: [{date: "2025-05-14", score: 6.23}, ...]
   const dailySent = {}
-  for (const [d, scores] of Object.entries(sentByDate)) {
-    dailySent[d] = scores.reduce((a, b) => a + b, 0) / scores.length
+  for (const row of sentimentData) {
+    if (row.date) dailySent[row.date] = Number(row.score)
   }
 
   const sorted = [...priceData].sort((a, b) => String(a.date).localeCompare(String(b.date)))

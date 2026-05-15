@@ -156,6 +156,7 @@ export default function Dashboard() {
 
   const [price, setPrice] = useState([])
   const [sentiment, setSentiment] = useState([])
+  const [sentimentDaily, setSentimentDaily] = useState([])
   const [fundamentals, setFundamentals] = useState(null)
   const [incomeStatement, setIncomeStatement] = useState([])
   const [performance, setPerformance] = useState(null)
@@ -199,6 +200,7 @@ export default function Dashboard() {
     setDecomposition(null)
     setRollingCorr(null)
     setAnalysis(null)
+    setSentimentDaily([])
 
     try {
       const [priceRes, sentRes, fundRes, incRes, perfRes, forecastRes, regressionRes, predictionRes, decompRes, rollingCorrRes] = await Promise.allSettled([
@@ -215,8 +217,11 @@ export default function Dashboard() {
       ])
 
       setPrice(priceRes.status === 'fulfilled' ? priceRes.value.data : [])
-      const sentData = sentRes.status === 'fulfilled' ? sentRes.value.data : []
+      const sentPayload = sentRes.status === 'fulfilled' ? sentRes.value.data : {}
+      const sentData = sentPayload.articles || []
+      const sentDailyData = sentPayload.daily || []
       setSentiment(sentData)
+      setSentimentDaily(sentDailyData)
       setFundamentals(fundRes.status === 'fulfilled' ? fundRes.value.data : null)
       setIncomeStatement(incRes.status === 'fulfilled' ? incRes.value.data : [])
       setPerformance(perfRes.status === 'fulfilled' ? perfRes.value.data : null)
@@ -237,13 +242,15 @@ export default function Dashboard() {
         .every(r => r.status === 'rejected')
       if (allFailed) setError(`No data found for "${sym}".`)
 
-      if (sentData.length === 0) {
+      if (sentData.length === 0 && sentDailyData.length === 0) {
         setBootstrapping(true)
         pollRef.current = setInterval(async () => {
           try {
             const res = await axios.get(`/api/sentiment/${sym}`)
-            if (res.data.length > 0) {
-              setSentiment(res.data)
+            const payload = res.data || {}
+            if ((payload.articles?.length > 0) || (payload.daily?.length > 0)) {
+              setSentiment(payload.articles || [])
+              setSentimentDaily(payload.daily || [])
               setBootstrapping(false)
               stopPolling()
             }
@@ -391,7 +398,7 @@ export default function Dashboard() {
               {chartTab === 'main' && (
                 <OverlayChart
                   priceData={price}
-                  sentimentData={sentiment}
+                  sentimentData={sentimentDaily}
                   ticker={ticker}
                   selectedDate={selectedSentimentDate}
                   onSentimentClick={setSelectedSentimentDate}
@@ -404,7 +411,7 @@ export default function Dashboard() {
                 <PredictionPanel data={prediction} ticker={ticker} forecastData={forecast} priceData={price} />
               )}
               {chartTab === 'sentiment' && (
-                <SentimentPriceChart priceData={price} sentimentData={sentiment} ticker={ticker} />
+                <SentimentPriceChart priceData={price} sentimentData={sentimentDaily} ticker={ticker} />
               )}
               {chartTab === 'regression' && (
                 <RegressionPanel data={regression} />

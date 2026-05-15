@@ -233,14 +233,17 @@ def get_price(ticker: str) -> list[dict]:
 
 
 @app.get("/api/sentiment/{ticker}")
-def get_sentiment(ticker: str) -> list[dict]:
+def get_sentiment(ticker: str) -> dict:
     """
-    Scored articles from the last 30 days, most recent first.
+    Returns:
+      articles — 200 most recent scored articles for the news feed
+      daily    — per-day average sentiment for all 30 days (for chart dots)
     If no data exists yet, fires a one-time background bootstrap (fetch + score).
     """
     symbol = ticker.upper()
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # 200 most recent articles for the news feed
             cur.execute(
                 """
                 SELECT sr.score,
@@ -258,9 +261,25 @@ def get_sentiment(ticker: str) -> list[dict]:
                 """,
                 (symbol,),
             )
-            rows = [dict(r) for r in cur.fetchall()]
+            articles = [dict(r) for r in cur.fetchall()]
 
-    if not rows:
+            # Daily aggregated scores for all 30 days — used for chart dots
+            cur.execute(
+                """
+                SELECT ra.published_at::date AS date,
+                       ROUND(AVG(sr.score)::numeric, 2) AS score
+                FROM sentiment_results sr
+                JOIN rss_articles ra ON ra.id = sr.article_id
+                WHERE sr.ticker = %s
+                  AND ra.published_at >= NOW() - INTERVAL '30 days'
+                GROUP BY ra.published_at::date
+                ORDER BY ra.published_at::date DESC
+                """,
+                (symbol,),
+            )
+            daily = [{"date": str(r["date"]), "score": float(r["score"])} for r in cur.fetchall()]
+
+    if not articles and not daily:
         with _bootstrap_lock:
             if symbol not in _bootstrapping:
                 _bootstrapping.add(symbol)
@@ -269,7 +288,7 @@ def get_sentiment(ticker: str) -> list[dict]:
                 ).start()
                 log.info("bootstrap triggered for %s", symbol)
 
-    return rows
+    return {"articles": articles, "daily": daily}
 
 
 @app.get("/api/fundamentals/{ticker}")
