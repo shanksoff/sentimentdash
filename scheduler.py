@@ -9,6 +9,7 @@ Runs once at startup then daily at 02:00 UTC:
 import time
 import logging
 import schedule
+from datetime import date, timedelta
 
 import psycopg2.extras
 
@@ -16,6 +17,7 @@ from database import close_pool, get_conn, init_pool
 from fetch_market_data import upsert_price_history, upsert_ticker
 from fetch_news import fetch_for_ticker
 from sentiment_engine import make_client, score_unscored
+from analytics import binary_prediction
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -46,8 +48,7 @@ def resolve_prediction_outcomes():
     look up actual prices and mark correct/incorrect.
     Hold signals are skipped (no directional bet).
     """
-    from datetime import date as date_cls
-    today = date_cls.today()
+    today = date.today()
 
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -121,6 +122,71 @@ def resolve_prediction_outcomes():
             log.error("failed to resolve prediction %d: %s", row_id, exc)
 
 
+def _fetch_price_rows(conn, symbol: str) -> list:
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            "SELECT date, open, high, low, close, volume "
+            "FROM price_history WHERE ticker = %s ORDER BY date ASC",
+            (symbol,),
+        )
+        return cur.fetchall()
+
+
+def _fetch_sentiment_rows(conn, symbol: str) -> list:
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT sr.score, ra.published_at
+            FROM sentiment_results sr
+            JOIN rss_articles ra ON ra.id = sr.article_id
+            WHERE sr.ticker = %s
+              AND ra.published_at >= NOW() - INTERVAL '30 days'
+            ORDER BY ra.published_at ASC
+            """,
+            (symbol,),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def _add_trading_days(start: date, n: int) -> date:
+    """Return the date that is `n` trading days (Mon-Fri) after `start`."""
+    d = start
+    added = 0
+    while added < n:
+        d += timedelta(days=1)
+        if d.weekday() < 5:
+            added += 1
+    return d
+
+
+def _log_prediction(symbol: str, result: dict) -> None:
+    """Insert today's prediction into prediction_log (once per ticker per day)."""
+    if result.get("error"):
+        return
+    signal = result.get("signal")
+    prob_up = result.get("prob_up")
+    horizon = result.get("horizon_days", 5)
+    if not signal or prob_up is None:
+        return
+    today = date.today()
+    outcome_date = _add_trading_days(today, horizon)
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO prediction_log
+                        (ticker, signal_date, signal, prob_up, horizon_days, outcome_date)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (ticker, signal_date) DO NOTHING
+                    """,
+                    (symbol, today, signal, prob_up, horizon, outcome_date),
+                )
+            conn.commit()
+    except Exception as exc:
+        log.warning("prediction log insert failed for %s: %s", symbol, exc)
+
+
 def daily_run():
     log.info("=== daily run started ===")
     client = make_client()
@@ -150,7 +216,21 @@ def daily_run():
             except Exception as exc:
                 log.error("scoring failed for %s: %s", symbol, exc)
 
-    # 3. Prune data older than 30 days
+    # 3. Log today's ML prediction for every ticker
+    for symbol in TRACKED_SYMBOLS:
+        try:
+            with get_conn() as conn:
+                price_rows = _fetch_price_rows(conn, symbol)
+                sent_rows = _fetch_sentiment_rows(conn, symbol)
+            if len(price_rows) >= 20:
+                result = binary_prediction(price_rows, sent_rows)
+                _log_prediction(symbol, result)
+                log.info("logged prediction for %s: %s (p_up=%.2f)",
+                         symbol, result.get("signal"), result.get("prob_up", 0))
+        except Exception as exc:
+            log.error("prediction logging failed for %s: %s", symbol, exc)
+
+    # 4. Prune data older than 30 days
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -170,7 +250,7 @@ def daily_run():
         log.info("pruned %d sentiment results and %d articles older than 30 days",
                  deleted_sr, deleted_ra)
 
-    # 4. Resolve pending prediction outcomes
+    # 5. Resolve pending prediction outcomes
     resolve_prediction_outcomes()
 
     log.info("=== daily run complete ===")
