@@ -9,24 +9,26 @@ import { bollingerBands, rsi as calcRSI, macd as calcMACD } from '../utils/indic
 // ─── Data helpers ────────────────────────────────────────────
 
 function mergeData(priceData, sentimentData) {
+  // sentimentData is pre-aggregated: [{date: "2025-05-14", score: 6.23}, ...]
   const priceDates = priceData.map(p => p.date).sort()
   const lastPriceDate = priceDates[priceDates.length - 1]
 
-  const sentByDate = {}
+  // Map each daily sentiment date to the nearest trading day
+  const avgSent = {}
   sentimentData.forEach(s => {
-    const raw = s.published_at || s.created_at
-    if (!raw) return
-    let date = raw.slice(0, 10)
+    if (!s.date) return
+    let date = s.date
     if (!priceDates.includes(date)) {
       const earlier = priceDates.filter(d => d <= date)
       date = earlier.length ? earlier[earlier.length - 1] : lastPriceDate
     }
-    if (!sentByDate[date]) sentByDate[date] = []
-    sentByDate[date].push(s.score)
+    // If multiple calendar days map to same trading day, average them
+    if (avgSent[date] == null) avgSent[date] = []
+    avgSent[date].push(Number(s.score))
   })
 
-  const avgSent = Object.fromEntries(
-    Object.entries(sentByDate).map(([d, scores]) => [
+  const finalSent = Object.fromEntries(
+    Object.entries(avgSent).map(([d, scores]) => [
       d,
       +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2),
     ])
@@ -35,7 +37,7 @@ function mergeData(priceData, sentimentData) {
   return priceData.map(p => ({
     date:      p.date,
     close:     parseFloat(p.close),
-    sentiment: avgSent[p.date] ?? null,
+    sentiment: finalSent[p.date] ?? null,
   }))
 }
 
